@@ -11,7 +11,7 @@ import * as THREE from "three";
 import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
 import type { Fish, Pond, V } from "./sim";
 
-const RINGS = 40, SIDES = 22;
+const RINGS = 28, SIDES = 14;
 
 function catmull(p: V[], t: number): V {
   const n = p.length - 1, x = t * n, i = Math.min(n - 1, Math.floor(x)), f = x - i;
@@ -112,7 +112,7 @@ export function createFish3D() {
   const canvas = document.createElement("canvas");
   const renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true, premultipliedAlpha: true, preserveDrawingBuffer: true });
   renderer.setClearColor(0x000000, 0);
-  renderer.outputColorSpace = THREE.SRGBColorSpace;
+  renderer.outputColorSpace = THREE.SRGBColorSpace; renderer.setPixelRatio(1);
   renderer.toneMapping = THREE.NoToneMapping;
   const scene = new THREE.Scene();
   const pmrem = new THREE.PMREMGenerator(renderer);

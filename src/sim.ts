@@ -88,6 +88,12 @@ export class Pond {
   border = 0;
   /** How far a point is toward the shore: 0 at the centre, 1 on the water line (pond shape = rounded, slightly irregular). */
   shore(x: number, y: number) {
+    // only a small stone cluster in the lower-left corner: fish and floaters keep off it
+    if (this.border <= 0) return 0;
+    const r = this.border * 4.2, d = len(x - 0, y - this.h);
+    return d < r ? 1.2 - d / r * 0.4 : 0;
+  }
+  private shoreUnused(x: number, y: number) {
     if (this.border <= 0) return 0;
     const a = this.w / 2 - this.border * 1.1, b = this.h / 2 - this.border * 1.1, dx = (x - this.w / 2) / a, dy = (y - this.h / 2) / b;
     const ang = Math.atan2(dy, dx), wob = 1 + 0.035 * Math.sin(ang * 3 + 1.3) + 0.025 * Math.sin(ang * 5 + 0.4);
@@ -338,9 +344,9 @@ export class Pond {
         }
         if (!slot && f.activity !== "flee") { const d = len(o.x - f.x, o.y - f.y); if (d < u * 2.2) { const k = (1 - d / (u * 2.2)) * 0.18; ax += Math.cos(o.heading) * k; ay += Math.sin(o.heading) * k; } }
       }
-      const look = f.length * (0.8 + f.speed / (u * 2)), lx = f.x + Math.cos(f.heading) * look, ly = f.y + Math.sin(f.heading) * look, m = u * 0.45 + this.border;
+      const look = f.length * (0.8 + f.speed / (u * 2)), lx = f.x + Math.cos(f.heading) * look, ly = f.y + Math.sin(f.heading) * look, m = u * 0.45;
       if (this.border > 0) { const v = this.shore(lx, ly); if (v > 0.82) { const cx = this.w / 2 - f.x, cy = this.h / 2 - f.y, d = len(cx, cy) || 1, k = (v - 0.82) * 14; ax += cx / d * k; ay += cy / d * k; } }
-      else if (lx < m) ax += (m - lx) / m * 2.5; if (lx > this.w - m) ax -= (lx - (this.w - m)) / m * 2.5;
+      const m2 = u * 0.45; if (lx < m2) ax += (m2 - lx) / m2 * 2.5; if (lx > this.w - m) ax -= (lx - (this.w - m)) / m * 2.5;
       if (ly < m) ay += (m - ly) / m * 2.5; if (ly > this.h - m) ay -= (ly - (this.h - m)) / m * 2.5;
       if (!slot) for (const z of this.keepClear) {
         if (lx > z.x && lx < z.x + z.w && ly > z.y && ly < z.y + z.h) { const cx = z.x + z.w / 2, cy = z.y + z.h / 2, dx = f.x - cx, dy = (f.y - cy) * (z.w / Math.max(1, z.h)), d = len(dx, dy) || 1; ax += dx / d * 1.4; ay += dy / d * 1.4; }

@@ -97,7 +97,7 @@ export function drawUnder(ctx: CanvasRenderingContext2D, pond: Pond, shadow = 0.
   const unit = Math.min(pond.w, pond.h) * 0.11;
 
   // water plants on the floor: soft tapered blades, blurred by the water above them, swaying
-  ctx.save(); ctx.filter = `blur(${Math.max(1, unit * 0.025 * sx)}px)`;
+  ctx.save();
   for (const w of pond.weeds) {
     const sway = Math.sin(pond.t * 0.6 + w.phase) * 0.3 + pond.current.x * 0.5, a = w.dir + sway, n = { x: -Math.sin(w.dir), y: Math.cos(w.dir) };
     const mx = w.x + Math.cos(w.dir + sway * 0.4) * w.len * 0.5, my = w.y + Math.sin(w.dir + sway * 0.4) * w.len * 0.5;
@@ -243,7 +243,7 @@ function drawPad(ctx: CanvasRenderingContext2D, p: Pond["pads"][number], sc: Sch
 /** A white water lily seen from above: two rings of pointed petals around a golden centre. */
 function drawLily(ctx: CanvasRenderingContext2D, x: number, y: number, r: number, rot: number, sc: Scheme) {
   ctx.save();
-  ctx.shadowColor = "rgba(0,30,20,0.35)"; ctx.shadowBlur = r * 0.35; ctx.shadowOffsetX = r * 0.08; ctx.shadowOffsetY = r * 0.14;
+
   for (const [ring, count, len, wid, off] of [[0, 10, 1, 0.3, 0], [1, 9, 0.78, 0.26, 0.5]] as const) {
     for (let i = 0; i < count; i++) {
       const a = rot + ((i + off) / count) * TAU, L = r * len, W = r * wid;
@@ -284,29 +284,13 @@ function stonesFor(pond: Pond) {
   const key = `${Math.round(pond.w)}x${Math.round(pond.h)}:${pond.border.toFixed(1)}`;
   if (stoneCache?.key === key) return stoneCache;
   let seed = 4242; const rnd = () => ((seed = (seed * 1664525 + 1013904223) >>> 0) / 4294967296);
-  const B = pond.border, cx = pond.w / 2, cy = pond.h / 2;
-  // the shoreline: walk around the pond until shore() == 1
-  const shoreline: [number, number][] = [];
-  for (let i = 0; i < 240; i++) {
-    const ang = (i / 240) * Math.PI * 2; let lo = 0, hi = Math.max(pond.w, pond.h);
-    for (let k = 0; k < 22; k++) { const m = (lo + hi) / 2; pond.shore(cx + Math.cos(ang) * m, cy + Math.sin(ang) * m) < 1 ? (lo = m) : (hi = m); }
-    shoreline.push([cx + Math.cos(ang) * lo, cy + Math.sin(ang) * lo]);
-  }
-  const stones: Stone[] = [];
-  const make = (x: number, y: number, s: number) => stones.push({ x, y, rx: s * (0.8 + rnd() * 0.45), ry: s * (0.6 + rnd() * 0.3), a: rnd() * Math.PI, c: Math.floor(rnd() * 4), moss: rnd() < 0.3, wob: Array.from({ length: 12 }, () => 0.92 + rnd() * 0.12) });
-  // two rows along the shore, irregular sizes; a few boulders
-  let acc = 0;
-  for (let i = 0; i < shoreline.length; i++) {
-    const [x0, y0] = shoreline[i], [x1, y1] = shoreline[(i + 1) % shoreline.length]; acc += Math.hypot(x1 - x0, y1 - y0);
-    if (acc < B * 0.9) continue; acc = 0;
-    const nx = x0 - cx, ny = y0 - cy, nl = Math.hypot(nx, ny) || 1, ox = nx / nl, oy = ny / nl;
-    const big = rnd() < 0.12;
-    make(x0 + ox * B * 0.25, y0 + oy * B * 0.25, B * (big ? 1.25 : 0.5 + rnd() * 0.4));
-    if (rnd() < 0.7) make(x0 + ox * B * (0.95 + rnd() * 0.4), y0 + oy * B * (0.95 + rnd() * 0.4), B * (0.45 + rnd() * 0.5));
-  }
-  for (const [qx, qy] of [[0, 0], [pond.w, 0], [0, pond.h], [pond.w, pond.h]]) for (let k = 0; k < 4; k++) make(qx + (qx ? -1 : 1) * B * (0.6 + rnd() * 1.4), qy + (qy ? -1 : 1) * B * (0.6 + rnd() * 1.4), B * (0.8 + rnd() * 0.7));
+  const B = pond.border, stones: Stone[] = [];
+  const make = (x: number, y: number, s: number) => stones.push({ x, y, rx: s * (0.8 + rnd() * 0.45), ry: s * (0.6 + rnd() * 0.3), a: rnd() * Math.PI, c: Math.floor(rnd() * 4), moss: rnd() < 0.35, wob: Array.from({ length: 12 }, () => 0.92 + rnd() * 0.12) });
+  // one natural cluster in the lower-left corner: two big rocks, a few smaller ones tumbling out
+  make(B * 1.2, pond.h - B * 1.0, B * 1.9); make(B * 3.0, pond.h - B * 0.6, B * 1.3); make(B * 0.6, pond.h - B * 2.9, B * 1.2);
+  for (let k = 0; k < 7; k++) { const a = rnd() * Math.PI * 0.5, d = B * (2.4 + rnd() * 1.6); make(Math.cos(a) * d, pond.h - Math.sin(a) * d, B * (0.35 + rnd() * 0.4)); }
   stones.sort((p, q) => q.rx - p.rx);
-  stoneCache = { key, stones, shoreline };
+  stoneCache = { key, stones, shoreline: [] };
   return stoneCache;
 }
 
@@ -321,28 +305,26 @@ function stonePath(ctx: CanvasRenderingContext2D, s: Stone, dx = 0, dy = 0, grow
   ctx.closePath();
 }
 
+let borderLayer: { key: string; canvas: HTMLCanvasElement } | null = null;
 function drawBorder(ctx: CanvasRenderingContext2D, pond: Pond, sc: Scheme) {
-  const { stones, shoreline } = stonesFor(pond), B = pond.border;
-  // the bank outside the water: moss and earth
-  ctx.save();
-  ctx.beginPath(); ctx.rect(-10, -10, pond.w + 20, pond.h + 20);
-  shoreline.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y))); ctx.closePath();
-  ctx.fillStyle = sc.moss; ctx.fill("evenodd");
-  ctx.clip("evenodd");
-  for (let i = 0; i < 160; i++) { const x = ((i * 97.3) % 1) * pond.w + ((i * 37) % pond.w), y = ((i * 61) % pond.h); ctx.fillStyle = i % 3 ? "rgba(0,0,0,0.12)" : "rgba(255,255,230,0.08)"; ctx.beginPath(); ctx.arc(x % pond.w, y, B * (0.15 + (i % 5) * 0.05), 0, Math.PI * 2); ctx.fill(); }
-  ctx.restore();
-  // a dark wet band where the water meets the stones, then their shadows on the water
-  ctx.save(); ctx.strokeStyle = "rgba(0,0,0,0.35)"; ctx.lineWidth = B * 0.5; ctx.filter = `blur(${B * 0.3}px)`;
-  ctx.beginPath(); shoreline.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y))); ctx.closePath(); ctx.stroke();
-  ctx.fillStyle = "rgba(0,0,0,0.3)";
-  for (const s of stones) { stonePath(ctx, s, B * 0.12, B * 0.22, 1.05); ctx.fill(); }
-  ctx.restore();
-  for (const s of stones) {
-    const grd = ctx.createRadialGradient(s.x - s.rx * 0.35, s.y - s.ry * 0.4, s.rx * 0.1, s.x, s.y, s.rx * 1.15);
-    grd.addColorStop(0, sc.stone[s.c]); grd.addColorStop(0.7, sc.stone[(s.c + 2) % 4]); grd.addColorStop(1, sc.stoneDark);
-    ctx.fillStyle = grd; stonePath(ctx, s); ctx.fill();
-    if (s.moss) { ctx.save(); stonePath(ctx, s); ctx.clip(); ctx.fillStyle = sc.moss; ctx.globalAlpha = 0.6; ctx.beginPath(); ctx.ellipse(s.x - s.rx * 0.3, s.y - s.ry * 0.45, s.rx * 0.6, s.ry * 0.4, s.a, 0, Math.PI * 2); ctx.fill(); ctx.restore(); }
+  // drawn once into its own canvas (it never moves), then stamped each frame
+  const W = ctx.canvas.width, H = ctx.canvas.height, key = `${W}x${H}:${pond.style}:${pond.border.toFixed(1)}`;
+  if (borderLayer?.key !== key) {
+    const c = document.createElement("canvas"); c.width = W; c.height = H;
+    const g = c.getContext("2d")!; g.setTransform(W / pond.w, 0, 0, H / pond.h, 0, 0);
+    const { stones } = stonesFor(pond), B = pond.border;
+    g.save(); g.fillStyle = "rgba(0,0,0,0.3)"; g.filter = `blur(${B * 0.3 * (W / pond.w)}px)`;
+    for (const s of stones) { stonePath(g, s, B * 0.15, B * 0.28, 1.06); g.fill(); }
+    g.restore();
+    for (const s of stones) {
+      const grd = g.createRadialGradient(s.x - s.rx * 0.35, s.y - s.ry * 0.4, s.rx * 0.1, s.x, s.y, s.rx * 1.15);
+      grd.addColorStop(0, sc.stone[s.c]); grd.addColorStop(0.7, sc.stone[(s.c + 2) % 4]); grd.addColorStop(1, sc.stoneDark);
+      g.fillStyle = grd; stonePath(g, s); g.fill();
+      if (s.moss) { g.save(); stonePath(g, s); g.clip(); g.fillStyle = sc.moss; g.globalAlpha = 0.6; g.beginPath(); g.ellipse(s.x - s.rx * 0.3, s.y - s.ry * 0.45, s.rx * 0.6, s.ry * 0.4, s.a, 0, Math.PI * 2); g.fill(); g.restore(); }
+    }
+    borderLayer = { key, canvas: c };
   }
+  ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.drawImage(borderLayer.canvas, 0, 0); ctx.restore();
 }
 
 function petalPath(ctx: CanvasRenderingContext2D, x: number, y: number, r: number, a: number) {

@@ -104,7 +104,7 @@ export const KoiPond = forwardRef<KoiPondHandle, KoiPondProps>(function KoiPond(
     const fit = () => {
       const r = canvas.getBoundingClientRect(), w = Math.max(1, Math.round(r.width * scale)), h = Math.max(1, Math.round(r.height * scale));
       canvas.width = Math.round(r.width * dpr); canvas.height = Math.round(r.height * dpr);
-      scene.width = w; scene.height = h; topLayer.width = canvas.width; topLayer.height = canvas.height;
+      scene.width = w; scene.height = h; topLayer.width = Math.round(r.width * Math.min(dpr, 1.5)); topLayer.height = Math.round(r.height * Math.min(dpr, 1.5));
       if (!pond) { pond = new Pond({ width: w, height: h, fish, fishSize, pads, petals, minnows, seed }); pond.rain = rainRef.current; pondRef.current = pond; }
       else if (w !== pond.w || h !== pond.h) pond.resize(w, h);
       sizeRef.current = { w, h };
@@ -160,7 +160,7 @@ export const KoiPond = forwardRef<KoiPondHandle, KoiPondProps>(function KoiPond(
       if (scrollCurrent) pond.current = { x: flow.x, y: flow.y };
       pond.style = styleRef.current; pond.border = borderRef.current ? Math.min(pond.w, pond.h) * 0.06 : 0;
       while (acc >= 1 / 60) { pond.step(1 / 60); acc -= 1 / 60; }
-      if (real) { drawUnder(sctx, pond, 0.8, false); drawTop(tctx, pond); fish3d?.render(pond, canvas.width, canvas.height); real.render(scene, topLayer, pond.w, pond.h, pond.ripples, pond.t, themeRef.current, dpr, 2, pond, fish3d?.canvas); }
+      if (real) { drawUnder(sctx, pond, 0.8, false); drawTop(tctx, pond); fish3d?.render(pond, Math.round(canvas.width / dpr * Math.min(dpr, 1.5)), Math.round(canvas.height / dpr * Math.min(dpr, 1.5))); real.render(scene, topLayer, pond.w, pond.h, pond.ripples, pond.t, themeRef.current, dpr, 2, pond, fish3d?.canvas); }
       else { drawScene(sctx, pond); water!.render(scene, pond.w, pond.h, pond.ripples, pond.t, themeRef.current, dpr); }
       if (visible && !reduced) raf = requestAnimationFrame(loop);
     };

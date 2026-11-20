@@ -84,6 +84,8 @@ export const KoiPond = forwardRef<KoiPondHandle, KoiPondProps>(function KoiPond(
   const rainRef = useRef(rain); rainRef.current = rain;
   const dropRef = useRef<HTMLDivElement>(null);
   const dotRef = useRef<HTMLDivElement>(null);
+  // where the last tap or click was (0..1): a style change spreads out from there
+  const lastTapRef = useRef<[number, number]>([0.5, 0.5]);
 
   useImperativeHandle(ref, () => ({
     feed: (x, y) => pondRef.current?.feed(x * sizeRef.current.w, y * sizeRef.current.h),
@@ -134,9 +136,11 @@ export const KoiPond = forwardRef<KoiPondHandle, KoiPondProps>(function KoiPond(
       if (!pond) return; const p = toPond(e); if (!p.inside) return;
       const now = performance.now();
       if (now - lastTap < 320) pond.feed(p.x, p.y); else pond.splash(p.x, p.y);
-      lastTap = now; press = now; pressAt = p; drop.down = true;
+      lastTap = now; press = now; pressAt = p; drop.down = true; lastTapRef.current = [p.x / pond.w, p.y / pond.h];
     };
     const onUp = () => { press = 0; drop.down = false; };
+    const onAnyDown = (e: PointerEvent) => { const r = canvas.getBoundingClientRect(); lastTapRef.current = [Math.min(1, Math.max(0, (e.clientX - r.left) / r.width)), Math.min(1, Math.max(0, (e.clientY - r.top) / r.height))]; };
+    window.addEventListener("pointerdown", onAnyDown);
     if (interactive) { canvas.addEventListener("pointermove", onMove); canvas.addEventListener("pointerdown", onDown); window.addEventListener("pointerup", onUp); canvas.addEventListener("pointerleave", () => pond && pond.setPointer(pond.pointer.x, pond.pointer.y, false)); }
 
     // scroll becomes a current through the water; it eases off when you stop
@@ -179,7 +183,7 @@ export const KoiPond = forwardRef<KoiPondHandle, KoiPondProps>(function KoiPond(
         props3d?.render(pond, cssW, cssH, pond.border > 0 ? stonesFor(pond).stones : []);
         drawTop(tctx, pond, props3d ? true : undefined);
         fish3d?.render(pond, cssW, cssH);
-        stage.render({ under: scene, top: topLayer, pond, look: themeRef.current, dpr, fish: fish3d?.texture ?? null, props: props3d?.texture ?? null });
+        stage.render({ under: scene, top: topLayer, pond, look: themeRef.current, dpr, fish: fish3d?.texture ?? null, props: props3d?.texture ?? null, origin: lastTapRef.current });
       }
       else { drawScene(sctx, pond); water!.render(scene, pond.w, pond.h, pond.ripples, pond.t, themeRef.current, dpr); }
       if (visible && !reduced) raf = requestAnimationFrame(loop);
@@ -189,6 +193,7 @@ export const KoiPond = forwardRef<KoiPondHandle, KoiPondProps>(function KoiPond(
 
     return () => {
       cancelAnimationFrame(raf); ro.disconnect(); io.disconnect();
+      window.removeEventListener("pointerdown", onAnyDown);
       window.removeEventListener("wheel", onWheel); window.removeEventListener("touchmove", onTouchMove); window.removeEventListener("touchend", onTouchEnd);
       canvas.removeEventListener("pointermove", onMove); canvas.removeEventListener("pointerdown", onDown); window.removeEventListener("pointerup", onUp);
       pondRef.current = null; fish3d?.dispose(); props3d?.dispose(); stage?.dispose();

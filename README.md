@@ -42,7 +42,7 @@ anything else that renders React. `react` and `three` are peer dependencies; not
 | `ink` | a woodblock print: indigo water in soft steps, ink outlines, flat colour, paper grain |
 | `violet` | dithered: dark violet water, the koi glowing in the light tones (also `ember`, `mono`) |
 
-The look can change at any time; the fish carry on swimming.
+The look can change at any time: the new style spreads across the pond like a ripple from wherever the person last clicked, while the koi carry on swimming through it.
 
 ![koipond, dither look](media/dither.jpg)
 

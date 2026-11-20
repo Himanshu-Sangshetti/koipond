@@ -57,6 +57,28 @@ export function createStage(canvas: HTMLCanvasElement) {
   });
   const composeScene = new THREE.Scene(); composeScene.add(new THREE.Mesh(quadGeo, composeMat));
   const injected = new WeakSet<Ripple>();
+  // style changes: the new look spreads out from a point as a widening ripple; both looks render meanwhile
+  const blendMat = new THREE.RawShaderMaterial({
+    glslVersion: THREE.GLSL3, vertexShader: VERT, depthTest: false, depthWrite: false,
+    uniforms: { fromTex: { value: null }, toTex: { value: null }, origin: { value: new THREE.Vector2(0.5, 0.5) }, radius: { value: 0 }, aspect: { value: 1 } },
+    fragmentShader: `precision highp float; in vec2 uv; out vec4 o;
+      uniform sampler2D fromTex, toTex; uniform vec2 origin; uniform float radius, aspect;
+      void main(){
+        vec2 d = (uv - origin) * vec2(aspect, 1.); float r = length(d);
+        float edge = r - radius;
+        // a soft, wobbling wavefront: the old look bends a little just ahead of it
+        vec2 bend = normalize(d + 1e-5) * exp(-edge * edge * 900.) * .012;
+        vec4 a = texture(fromTex, uv + bend / vec2(aspect, 1.)), b = texture(toTex, uv);
+        float k = smoothstep(.012, -.012, edge);
+        vec4 c = mix(a, b, k);
+        c.rgb += exp(-edge * edge * 2500.) * .18;   // light caught on the wavefront
+        o = vec4(c.rgb, 1.);
+      }`,
+  });
+  const blendScene = new THREE.Scene(); blendScene.add(new THREE.Mesh(quadGeo, blendMat));
+  let rtFrom: THREE.WebGLRenderTarget | null = null, rtTo: THREE.WebGLRenderTarget | null = null;
+  let shown: WaterLook | null = null, shownKey = "", trans: { from: WaterLook; t0: number; origin: [number, number] } | null = null;
+  const lookKey = (l: WaterLook) => JSON.stringify([l.mode, l.deep, l.shallow, l.floor, l.palette, l.film, l.pixel]);
   // the floor is static: bake it (lit) into a texture whenever the look or pond size changes
   let floorRT: THREE.WebGLRenderTarget | null = null, floorKey = "";
   const v3 = (u: THREE.Vector3, h: string) => { const [r, g, b] = hex(h); u.set(r, g, b); };
@@ -64,8 +86,11 @@ export function createStage(canvas: HTMLCanvasElement) {
   return {
     renderer,
     setSize(w: number, h: number) { renderer.setSize(w, h, false); },
-    render(o: { under: HTMLCanvasElement; top: HTMLCanvasElement; pond: Pond; look: WaterLook; dpr: number; fish: THREE.Texture | null; props: THREE.Texture | null }) {
-      const { pond, look } = o;
+    render(o: { under: HTMLCanvasElement; top: HTMLCanvasElement; pond: Pond; look: WaterLook; dpr: number; fish: THREE.Texture | null; props: THREE.Texture | null; origin?: [number, number] }) {
+      const { pond } = o; let look = o.look;
+      const nk = lookKey(o.look);
+      if (shown && nk !== shownKey && !trans) trans = { from: shown, t0: pond.t, origin: o.origin ?? [0.5, 0.5] };
+      if (nk !== shownKey) { shown = o.look; shownKey = nk; }
       sizeWaves(pond.w / pond.h);
       // new disturbances become drops in the height field
       let n = 0; const short = Math.min(pond.w, pond.h);
@@ -85,6 +110,7 @@ export function createStage(canvas: HTMLCanvasElement) {
       underTex.image = o.under; underTex.needsUpdate = true;
       topTex.image = o.top; topTex.needsUpdate = true;
       const U = composeMat.uniforms, size = renderer.getDrawingBufferSize(new THREE.Vector2());
+      const setLook = (lk: WaterLook) => { look = lk;
       U.waves.value = states[cur].texture; U.fishgl.value = o.fish; U.useGL.value = o.fish ? 1 : 0;
       U.props.value = o.props; U.useProps.value = o.props ? 1 : 0;
       U.res.value.copy(size); U.pond.value.set(pond.w, pond.h); U.wtexel.value.set(1 / WW, 1 / WH);
@@ -94,7 +120,8 @@ export function createStage(canvas: HTMLCanvasElement) {
       U.clarity.value = look.clarity ?? 1; U.film.value = look.film ? 1 : 0; U.waveAmt.value = look.waves ?? 1;
       const ab = look.absorb ?? [2.4, 0.92, 0.78]; U.absorbK.value.set(ab[0], ab[1], ab[2]);
       v3(U.waterDeep.value, look.deep); v3(U.waterShallow.value, look.shallow); v3(U.tint.value, look.tint ?? "#ffffff");
-      look.palette.forEach((c, i) => v3(U[`c${i}`].value, c));
+      look.palette.forEach((c, i) => v3(U[`c${i}`].value, c)); };
+      setLook(o.look);
       const fk = `${look.floor}|${pond.w.toFixed(0)}x${pond.h.toFixed(0)}`;
       if (fk !== floorKey) {
         floorKey = fk;
@@ -104,7 +131,22 @@ export function createStage(canvas: HTMLCanvasElement) {
         U.bakeMode.value = 0; U.res.value.copy(size); U.mode.value = look.mode === "dither" ? 0 : look.mode === "ink" ? 2 : 1;
       }
       U.floorTex.value = floorRT!.texture; U.useBake.value = 1;
-      renderer.render(composeScene, quadCam);
+      if (!trans) { renderer.render(composeScene, quadCam); return; }
+      // transition: draw both looks, then reveal the new one from the origin outward
+      const k = (pond.t - trans.t0) / 1.25;
+      if (k >= 1) { trans = null; renderer.render(composeScene, quadCam); return; }
+      const mk = (rt: THREE.WebGLRenderTarget | null) => { if (!rt || rt.width !== size.x || rt.height !== size.y) { rt?.dispose(); return new THREE.WebGLRenderTarget(size.x, size.y, { depthBuffer: false }); } return rt; };
+      rtFrom = mk(rtFrom); rtTo = mk(rtTo);
+      renderer.setRenderTarget(rtTo); renderer.render(composeScene, quadCam);
+      setLook(trans.from); renderer.setRenderTarget(rtFrom); renderer.render(composeScene, quadCam);
+      renderer.setRenderTarget(null);
+      const B = blendMat.uniforms, asp = size.x / size.y;
+      B.fromTex.value = rtFrom.texture; B.toTex.value = rtTo.texture; B.aspect.value = asp;
+      B.origin.value.set(trans.origin[0], 1 - trans.origin[1]);
+      const far = Math.hypot(Math.max(trans.origin[0], 1 - trans.origin[0]) * asp, Math.max(trans.origin[1], 1 - trans.origin[1]));
+      const e = k < .5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2;
+      B.radius.value = e * (far + 0.05);
+      renderer.render(blendScene, quadCam);
     },
     dispose() { states.forEach((s) => s.dispose()); renderer.dispose(); },
   };

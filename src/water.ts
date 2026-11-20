@@ -348,7 +348,11 @@ void main(){
     // whites to the brightest colour, red and orange patches one step down, sumi stays dark
     float fl0 = dot(srgb(frgb), vec3(.299, .587, .114));
     float koiL = fl0 > .62 ? .98 : fl0 > .3 ? .7 : .22;
-    l = mix(l * .72, koiL, smoothstep(.5, .85, isFish) * (1. - tp.a));
+    // the water's movement gets its own tones so the dither can't swallow it:
+    // ripples and wakes snap to the bright tone, the light web and wind sheen lift the water a step
+    float waterL = l * .6 + cau.g * .08 * min(causticAmt, 1.5) + smoothstep(.05, .5, length(n.xy)) * .1;
+    waterL = max(waterL, smoothstep(.05, .38, ripL) * .95);
+    l = mix(waterL, koiL, smoothstep(.5, .85, isFish) * (1. - tp.a));
     float k = clamp(l * 3. + bayer(gl_FragCoord.xy / px) - .5, 0., 3.);
     o = vec4(k < 1. ? mix(c0, c1, step(.5, k)) : k < 2. ? mix(c1, c2, step(1.5, k)) : mix(c2, c3, step(2.5, k)), 1);
   } else {

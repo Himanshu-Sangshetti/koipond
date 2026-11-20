@@ -73,7 +73,7 @@ void main(){
 const hex = (h: string) => { const n = parseInt(h.replace("#", ""), 16); return [((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255]; };
 const KIND: Record<Ripple["kind"], [number, number]> = { tap: [0.42, 2.6], drop: [0.3, 1.6], nibble: [0.22, 1.0], wake: [0.25, 1.0] };
 
-export interface Look { mode: "dither" | "color"; palette: [string, string, string, string]; deep: string; shallow: string; tint?: string; pixel: number; bright?: number; floor?: "sand" | "stones" | "pebbles"; caustics?: number; clarity?: number; waves?: number }
+export interface Look { mode: "dither" | "color"; palette: [string, string, string, string]; deep: string; shallow: string; tint?: string; pixel: number; bright?: number; floor?: "sand" | "stones" | "pebbles"; caustics?: number; clarity?: number; waves?: number; film?: boolean; absorb?: [number, number, number] }
 
 export function createWater(canvas: HTMLCanvasElement) {
   const gl = canvas.getContext("webgl", { antialias: false, premultipliedAlpha: false, preserveDrawingBuffer: true });

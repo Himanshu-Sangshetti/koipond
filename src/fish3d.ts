@@ -47,7 +47,7 @@ function skin(f: Fish): THREE.CanvasTexture {
   while (cover < v.spotCover) {
     const x = W * (0.04 + r() * 0.82), y = H * (0.5 + (r() - 0.5) * 0.45), rx = W * (0.05 + r() * 0.09), ry = H * (0.16 + r() * 0.2), col = v.spots[Math.floor(r() * v.spots.length)];
     blob(x, y, rx, ry, col); blob(x + (r() - 0.5) * rx, y + (r() - 0.5) * ry, rx * 0.6, ry * 0.7, col);
-    cover += (rx / W) * (ry / H) * 6;
+    cover += (rx / W) * (ry / H) * 4;
   }
   // a darker line down the back and paler flanks, as real koi have
   const back = g.createLinearGradient(0, 0, 0, H);
@@ -119,7 +119,7 @@ export function createFish3D() {
   scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
   scene.environmentIntensity = 0.18;
   const sun = new THREE.DirectionalLight(0xfff4e0, 1.7); sun.position.set(-0.45, -0.6, 1); scene.add(sun);
-  scene.add(new THREE.HemisphereLight(0xdfeee9, 0x3a5a54, 1.1));
+  scene.add(new THREE.HemisphereLight(0xf2efe4, 0x8a8a70, 1.25));
   const cam = new THREE.OrthographicCamera(0, 1, 0, 1, -500, 500);
   cam.position.set(0, 0, 100); cam.up.set(0, 1, 0); cam.lookAt(0, 0, 0);
   const kois = new Map<number, Koi>();
@@ -176,7 +176,7 @@ export function createFish3D() {
           }
         }
         pos.needsUpdate = true; k.body.geometry.computeVertexNormals();
-        k.mat.color.copy(new THREE.Color(1, 1, 1).lerp(water, f.depth * 0.45));
+        k.mat.color.copy(new THREE.Color(1, 1, 1).lerp(water, f.depth * 0.18));
         k.finMat.opacity = 0.45 - f.depth * 0.15;
         // pectoral and pelvic fins: membranes swept back from the body, paddling gently
         const paddle = 0.85 + 0.2 * Math.sin(f.finPhase * 2.2);

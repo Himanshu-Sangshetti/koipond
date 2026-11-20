@@ -185,10 +185,10 @@ export function drawTop(ctx: CanvasRenderingContext2D, pond: Pond) {
   for (const p of pond.pads) drawPad(ctx, p);
 }
 
-const PAD_TONES = [["#5c7f45", "#3f6131", "#294522"], ["#7d8a44", "#5b6a30", "#3c4a20"], ["#8e5a44", "#6e4232", "#4c2c22"]] as const;
+const PAD_TONES = [["#8c8f52", "#6b6e36", "#4b4d22"], ["#b3aa6b", "#9a9250", "#746c34"], ["#a88466", "#8c6a4e", "#654a36"]] as const;
 
 function drawPad(ctx: CanvasRenderingContext2D, p: Pond["pads"][number]) {
-  const tone = PAD_TONES[p.tone < 0.6 ? 0 : p.tone < 0.85 ? 1 : 2];
+  const tone = PAD_TONES[p.tone < 0.45 ? 0 : p.tone < 0.75 ? 1 : 2];
   // leaf body: lit toward the upper left, darker at the edge
   const grd = ctx.createRadialGradient(p.x - p.r * 0.25, p.y - p.r * 0.3, p.r * 0.05, p.x, p.y, p.r * 1.02);
   grd.addColorStop(0, tone[0]); grd.addColorStop(0.7, tone[1]); grd.addColorStop(1, tone[2]);
@@ -199,13 +199,13 @@ function drawPad(ctx: CanvasRenderingContext2D, p: Pond["pads"][number]) {
   for (let i = 0; i <= n; i++) {
     const a = p.angle + p.notch * 0.5 + (i / n) * (TAU - p.notch), bend = 0.12 * Math.sin(i * 1.7);
     const g2 = ctx.createLinearGradient(p.x, p.y, p.x + Math.cos(a) * p.r, p.y + Math.sin(a) * p.r);
-    g2.addColorStop(0, "rgba(210,225,160,0.45)"); g2.addColorStop(1, "rgba(210,225,160,0)");
+    g2.addColorStop(0, "rgba(235,228,190,0.5)"); g2.addColorStop(1, "rgba(235,228,190,0.08)");
     ctx.strokeStyle = g2; ctx.lineWidth = Math.max(0.4, p.r * 0.018);
     ctx.beginPath(); ctx.moveTo(p.x, p.y);
     ctx.quadraticCurveTo(p.x + Math.cos(a + bend) * p.r * 0.5, p.y + Math.sin(a + bend) * p.r * 0.5, p.x + Math.cos(a) * p.r * 0.97, p.y + Math.sin(a) * p.r * 0.97); ctx.stroke();
   }
   // rim: a slightly raised, lighter edge
-  ctx.strokeStyle = "rgba(220,230,170,0.22)"; ctx.lineWidth = Math.max(0.6, p.r * 0.05); padPath(ctx, p.x, p.y, p.r * 0.985, p.angle, p.notch); ctx.stroke();
+  ctx.strokeStyle = "rgba(60,55,25,0.35)"; ctx.lineWidth = Math.max(0.6, p.r * 0.04); padPath(ctx, p.x, p.y, p.r * 0.985, p.angle, p.notch); ctx.stroke();
   ctx.fillStyle = "rgba(255,255,255,0.06)"; ctx.beginPath(); ctx.ellipse(p.x - p.r * 0.32, p.y - p.r * 0.36, p.r * 0.4, p.r * 0.2, -0.6, 0, TAU); ctx.fill();
   ctx.restore();
   if (p.flower) drawLily(ctx, p.x + Math.cos(p.angle + Math.PI) * p.r * 0.15, p.y + Math.sin(p.angle + Math.PI) * p.r * 0.15, p.r * 0.48, p.angle * 3);

@@ -31,14 +31,15 @@ export type Activity = "drift" | "cruise" | "dart" | "rest" | "investigate" | "f
 export interface Variety { name: string; base: string; spots: string[]; fin: string; spotCover: number }
 export const MINNOW: Variety = { name: "minnow", base: "#4c5a55", spots: [], fin: "#7c8c86", spotCover: 0 };
 export const VARIETIES: Variety[] = [
-  { name: "kohaku", base: "#f6f2ea", spots: ["#e8380f"], fin: "#f6f2ea", spotCover: 0.45 },
-  { name: "sanke", base: "#f6f2ea", spots: ["#e8380f", "#e8380f", "#17141c"], fin: "#f6f2ea", spotCover: 0.5 },
-  { name: "showa", base: "#17141c", spots: ["#e8380f", "#f6f2ea"], fin: "#d9d3cc", spotCover: 0.55 },
-  { name: "ogon", base: "#f1c24f", spots: [], fin: "#f5d27a", spotCover: 0 },
-  { name: "chagoi", base: "#b98a5a", spots: [], fin: "#caa27a", spotCover: 0 },
-  { name: "tancho", base: "#f6f2ea", spots: [], fin: "#f6f2ea", spotCover: 0 },
-  { name: "asagi", base: "#7d93a8", spots: ["#e8380f"], fin: "#c9d3dc", spotCover: 0.25 },
-  { name: "yamabuki", base: "#f0a53a", spots: ["#f6f2ea"], fin: "#f4bf6a", spotCover: 0.2 },
+  // the palette of the reference pond: vivid orange-red on cream, a few with sumi black, warm orange and gold
+  { name: "kohaku", base: "#f2ebdf", spots: ["#e04a1f"], fin: "#f2ebdf", spotCover: 0.85 },
+  { name: "sanke", base: "#f2ebdf", spots: ["#e04a1f", "#e04a1f", "#1c1a1e"], fin: "#f2ebdf", spotCover: 0.8 },
+  { name: "yamabuki", base: "#ec7a2a", spots: ["#f2ebdf"], fin: "#f3c79a", spotCover: 0.25 },
+  { name: "kohaku", base: "#f2ebdf", spots: ["#e8642a"], fin: "#f2ebdf", spotCover: 0.95 },
+  { name: "ogon", base: "#eaa53c", spots: ["#f2ebdf"], fin: "#f2cf8a", spotCover: 0.12 },
+  { name: "tancho", base: "#f2ebdf", spots: [], fin: "#f2ebdf", spotCover: 0 },
+  { name: "sanke", base: "#f2ebdf", spots: ["#d94420", "#1c1a1e"], fin: "#f2ebdf", spotCover: 0.75 },
+  { name: "showa", base: "#1c1a1e", spots: ["#e04a1f", "#f2ebdf"], fin: "#d9d3cc", spotCover: 0.7 },
 ];
 
 /** A spot on the body, in body coordinates: u along the body (0 nose, 1 tail root), v across (-1..1). */
@@ -110,7 +111,7 @@ export class Pond {
 
   private makeFish(id: number): Fish {
     const r = this.rnd, variety = VARIETIES[id % VARIETIES.length];
-    const length = this.unit * r.between(0.78, 1.25), girth = length * r.between(0.1, 0.125);
+    const length = this.unit * r.between(0.78, 1.25), girth = length * r.between(0.135, 0.16);
     const x = r.between(0.1, 0.9) * this.w, y = r.between(0.12, 0.88) * this.h, heading = r.between(-Math.PI, Math.PI);
     const joints: V[] = [], seg = length / (JOINTS - 1);
     for (let i = 0; i < JOINTS; i++) joints.push({ x: x - Math.cos(heading) * seg * i, y: y - Math.sin(heading) * seg * i });
@@ -118,7 +119,7 @@ export class Pond {
     for (let i = 1; i <= TAIL; i++) { tail.push({ x: last.x - Math.cos(heading) * seg * 0.8 * i, y: last.y - Math.sin(heading) * seg * 0.8 * i }); tailVel.push({ x: 0, y: 0 }); }
     // spots: a few soft blobs; tancho gets its single red crown
     const spots: Spot[] = [];
-    if (variety.name === "tancho") spots.push({ u: 0.07, v: 0, ru: 0.055, rv: 0.55, color: "#e8380f" });
+    if (variety.name === "tancho") spots.push({ u: 0.07, v: 0, ru: 0.055, rv: 0.55, color: "#dc4f26" });
     let cover = 0;
     while (cover < variety.spotCover) {
       const ru = r.between(0.06, 0.15), rv = r.between(0.4, 0.95);

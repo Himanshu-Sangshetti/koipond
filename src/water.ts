@@ -49,7 +49,8 @@ in vec2 uv; out vec4 o;
 uniform sampler2D waves, fish, top, fishgl;
 uniform float useGL, fishPremul;
 uniform vec2 res, pond, wtexel;
-uniform float t, px, mode, bright, sand, causticAmt, clarity, waveAmt;
+uniform float t, px, mode, bright, sand, causticAmt, clarity, waveAmt, film;
+uniform vec3 absorbK;
 uniform vec3 waterDeep, waterShallow, tint, c0, c1, c2, c3;
 
 float h21(vec2 p){ p = fract(p * vec2(234.34, 435.345)); p += dot(p, p + 34.23); return fract(p.x * p.y); }
@@ -98,15 +99,16 @@ vec3 pebbleFloor(vec2 q, out float height){
   vec2 p = q * (2.6 + .9 * step(.5, vnoise(q * .3))), i = floor(p), f = fract(p); float d1 = 9., d2 = 9.; vec2 id = vec2(0);
   for (int y = -1; y <= 1; y++) for (int x = -1; x <= 1; x++){
     vec2 g = vec2(x, y), c = g + .2 + .6 * h22(i + g);
-    float d = length((f - c) * vec2(1., 1.15 + .3 * h21(i + g)));
+    float d = length((f - c) * vec2(1., 1.25 + .45 * h21(i + g)));
     if (d < d1){ d2 = d1; d1 = d; id = i + g; } else if (d < d2) d2 = d;
   }
   float r = h21(id), r2 = h21(id + 7.);
-  vec3 col = r < .3 ? vec3(.55,.6,.52) : r < .55 ? vec3(.46,.5,.5) : r < .8 ? vec3(.66,.62,.52) : vec3(.48,.4,.32);
+  vec3 col = r < .35 ? vec3(.62,.66,.56) : r < .6 ? vec3(.55,.6,.54) : r < .85 ? vec3(.7,.68,.58) : vec3(.5,.5,.44);
   col = mix(col, vec3(dot(col, vec3(.33))), .5) * (.9 + .2 * r2);
-  float gap = smoothstep(.02, .35, d2 - d1);
-  float dome = sqrt(max(0., 1. - d1 * 1.3));
-  col = mix(col * .7, col * (.85 + .2 * dome), gap);
+  float gap = smoothstep(.0, .45, d2 - d1);
+  float dome = sqrt(max(0., 1. - d1 * 1.2));
+  col = mix(col * .86, col * (.9 + .12 * dome), gap);
+  col = mix(vec3(.6, .63, .55), col, .55);              // pebbles stay quiet under the water
   col *= .9 + .12 * vnoise(q * 30.);                   // speckle
   height = dome * gap;
   return col;
@@ -228,7 +230,7 @@ void main(){
   float fishNear = f.a;
 
   // absorption with depth (red goes first) and light scattered back from the water body
-  vec3 absorb = vec3(2.4, .92, .78);
+  vec3 absorb = absorbK;
   float isFish = useGL > .5 ? f.a : fishNear * step(.12, dot(f.rgb, vec3(.33)));   // shadows (dark) stay on the floor
   float path = mix(depth, .02, isFish);
   vec3 trans = exp(-absorb * path * 1.7 * clarity);
@@ -237,8 +239,8 @@ void main(){
   // in clear shallow sea the light web is brighter than anything: add it after the water colour
   if (lagoon) col += cau * lin(vec3(.78, .96, .92)) * .5 * causticAmt * (1. - isFish * .7) * (1. - depth * .4);
   // sunlight comes through unevenly: broad brighter and darker patches drift slowly
-  float dapple = fbm(st * pond / unit * .9 + vec2(t * .015, -t * .01));
-  col *= .78 + .5 * smoothstep(.25, .8, dapple);
+  float dapple = fbm(st * pond / unit * (film > .5 ? .35 : .9) + vec2(t * .015, -t * .01));
+  col *= film > .5 ? .5 + .75 * smoothstep(.3, .72, dapple) : .78 + .5 * smoothstep(.25, .8, dapple);
 
   // surface: soft sky reflection by Fresnel, drifting cloud light, and sun glints on the ripples
   vec3 V = vec3(0, 0, 1);
@@ -265,6 +267,13 @@ void main(){
     // filmic tone curve (ACES fit) and a whisper of grain
     col *= 1.5;
     col = srgb(clamp((col * (2.51 * col + .03)) / (col * (2.43 * col + .59) + .14), 0., 1.));
+    if (film > .5) {
+      // the reference's look: a little desaturated, warm, faded blacks, soft highlights
+      float l = dot(col, vec3(.299, .587, .114));
+      col = mix(vec3(l), col, mix(.8, 1.15, isFish));
+      col = (col - .45) * 1.12 + .45;
+      col = col * vec3(.9, .91, .84) + vec3(.045, .05, .03);
+    }
     // things floating on top (lily pads, food) are not under water: drawn after the tone curve
     col = mix(col, tp.rgb * (1. - .35 * pow(length((st - .5) * vec2(1.1, 1.)), 2.2)), tp.a);
     col += (h21(gl_FragCoord.xy + fract(t) * 91.) - .5) * .018;
@@ -274,7 +283,7 @@ void main(){
 
 const hex = (h: string) => { const n = parseInt(h.replace("#", ""), 16); return [((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255]; };
 
-export interface WaterLook { mode: "dither" | "color"; palette: [string, string, string, string]; deep: string; shallow: string; tint?: string; pixel: number; bright?: number; floor?: "sand" | "stones" | "pebbles"; caustics?: number; clarity?: number; waves?: number }
+export interface WaterLook { mode: "dither" | "color"; palette: [string, string, string, string]; deep: string; shallow: string; tint?: string; pixel: number; bright?: number; floor?: "sand" | "stones" | "pebbles"; caustics?: number; clarity?: number; waves?: number; film?: boolean; absorb?: [number, number, number] }
 
 const STRENGTH: Record<Ripple["kind"], [number, number]> = { tap: [0.03, 1], drop: [0.014, 0.55], nibble: [0.01, 0.4], wake: [0.018, 0.42] }; // radius (of short side), strength
 
@@ -357,7 +366,8 @@ export function createRealWater(canvas: HTMLCanvasElement) {
       gl.uniform1f(U(compose, "t"), t); gl.uniform1f(U(compose, "px"), Math.max(1, look.pixel * dpr)); gl.uniform1f(U(compose, "mode"), look.mode === "dither" ? 0 : 1);
       gl.uniform1f(U(compose, "bright"), look.bright ?? 1);
       gl.uniform1f(U(compose, "sand"), look.floor === "pebbles" ? 2 : look.floor === "sand" ? 1 : 0); gl.uniform1f(U(compose, "causticAmt"), look.caustics ?? 1);
-      gl.uniform1f(U(compose, "clarity"), look.clarity ?? 1); gl.uniform1f(U(compose, "waveAmt"), look.waves ?? 1);
+      gl.uniform1f(U(compose, "clarity"), look.clarity ?? 1); gl.uniform1f(U(compose, "film"), look.film ? 1 : 0);
+      gl.uniform3fv(U(compose, "absorbK"), look.absorb ?? [2.4, 0.92, 0.78]); gl.uniform1f(U(compose, "waveAmt"), look.waves ?? 1);
       gl.uniform3fv(U(compose, "waterDeep"), hex(look.deep)); gl.uniform3fv(U(compose, "waterShallow"), hex(look.shallow)); gl.uniform3fv(U(compose, "tint"), hex(look.tint ?? "#ffffff"));
       look.palette.forEach((c, i) => gl.uniform3fv(U(compose, `c${i}`), hex(c)));
       gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);

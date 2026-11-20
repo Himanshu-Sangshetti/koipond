@@ -14,7 +14,7 @@ import { createFish3D } from "./fish3d";
 import { Pond, type V } from "./sim";
 
 export const LOOKS: Record<string, Look> = {
-  garden: { mode: "color", palette: ["#000", "#000", "#000", "#000"], deep: "#2a3a36", shallow: "#5d7b6c", tint: "#ffffff", pixel: 1, floor: "pebbles", caustics: .55, clarity: 1.15, waves: .7, bright: .85 },
+  garden: { mode: "color", palette: ["#000", "#000", "#000", "#000"], deep: "#46544b", shallow: "#7f9c86", tint: "#ffffff", pixel: 1, floor: "pebbles", caustics: .4, clarity: .55, waves: .8, bright: .78, film: true, absorb: [1.25, .78, 1.15] },
   lagoon: { mode: "color", palette: ["#000", "#000", "#000", "#000"], deep: "#08758c", shallow: "#25b8b4", tint: "#ffffff", pixel: 1, floor: "sand", caustics: 1.2, clarity: 1.0, waves: 1.3, bright: .85 },
   violet: { mode: "dither", palette: ["#09080f", "#2a2160", "#6c5ce7", "#e4dfff"], deep: "#05040a", shallow: "#15122a", pixel: 2 },
   ink: { mode: "dither", palette: ["#0c0c0c", "#3a3a3a", "#9a9a9a", "#f2f0ea"], deep: "#050505", shallow: "#1b1b1b", pixel: 2 },

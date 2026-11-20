@@ -352,7 +352,11 @@ void main(){
     // ripples and wakes snap to the bright tone, the light web and wind sheen lift the water a step
     float waterL = l * .6 + cau.g * .08 * min(causticAmt, 1.5) + smoothstep(.05, .5, length(n.xy)) * .1;
     waterL = max(waterL, smoothstep(.05, .38, ripL) * .95);
-    l = mix(waterL, koiL, smoothstep(.5, .85, isFish) * (1. - tp.a));
+    // fins and tails are thinner (part alpha): a pale membrane tone; the solid body gets its own colours
+    float finM = smoothstep(.1, .3, isFish) * (1. - smoothstep(.86, .97, isFish));
+    float bodyM = smoothstep(.86, .97, isFish);
+    l = mix(waterL, .58, finM * (1. - tp.a));
+    l = mix(l, koiL, bodyM * (1. - tp.a));
     float k = clamp(l * 3. + bayer(gl_FragCoord.xy / px) - .5, 0., 3.);
     o = vec4(k < 1. ? mix(c0, c1, step(.5, k)) : k < 2. ? mix(c1, c2, step(1.5, k)) : mix(c2, c3, step(2.5, k)), 1);
   } else {

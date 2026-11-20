@@ -13,7 +13,7 @@ import { createRealWater } from "./water";
 import { Pond, type V } from "./sim";
 
 export const LOOKS: Record<string, Look> = {
-  garden: { mode: "color", palette: ["#000", "#000", "#000", "#000"], deep: "#25464a", shallow: "#5a8a80", tint: "#ffffff", pixel: 1, floor: "pebbles", caustics: .45, clarity: 1.25, waves: 1, bright: 1.1 },
+  garden: { mode: "color", palette: ["#000", "#000", "#000", "#000"], deep: "#2a3a36", shallow: "#5d7b6c", tint: "#ffffff", pixel: 1, floor: "pebbles", caustics: .55, clarity: 1.15, waves: .7, bright: .85 },
   lagoon: { mode: "color", palette: ["#000", "#000", "#000", "#000"], deep: "#08758c", shallow: "#25b8b4", tint: "#ffffff", pixel: 1, floor: "sand", caustics: 1.2, clarity: 1.0, waves: 1.3, bright: .85 },
   violet: { mode: "dither", palette: ["#09080f", "#2a2160", "#6c5ce7", "#e4dfff"], deep: "#05040a", shallow: "#15122a", pixel: 2 },
   ink: { mode: "dither", palette: ["#0c0c0c", "#3a3a3a", "#9a9a9a", "#f2f0ea"], deep: "#050505", shallow: "#1b1b1b", pixel: 2 },
@@ -90,7 +90,7 @@ export const KoiPond = forwardRef<KoiPondHandle, KoiPondProps>(function KoiPond(
     const fit = () => {
       const r = canvas.getBoundingClientRect(), w = Math.max(1, Math.round(r.width * scale)), h = Math.max(1, Math.round(r.height * scale));
       canvas.width = Math.round(r.width * dpr); canvas.height = Math.round(r.height * dpr);
-      scene.width = w; scene.height = h; topLayer.width = w; topLayer.height = h;
+      scene.width = w; scene.height = h; topLayer.width = canvas.width; topLayer.height = canvas.height;
       if (!pond) { pond = new Pond({ width: w, height: h, fish, fishSize, pads, petals, seed }); pond.rain = rainRef.current; pondRef.current = pond; }
       else if (w !== pond.w || h !== pond.h) pond.resize(w, h);
       sizeRef.current = { w, h };
@@ -133,7 +133,7 @@ export const KoiPond = forwardRef<KoiPondHandle, KoiPondProps>(function KoiPond(
         el.style.transform = `translate(${drop.x}px, ${drop.y}px) translate(-50%, -50%) rotate(${ang}rad) scale(${stretch * (drop.down ? 0.7 : 1)}, ${(1 / Math.sqrt(stretch)) * (drop.down ? 0.7 : 1)})`;
       }
       while (acc >= 1 / 60) { pond.step(1 / 60); acc -= 1 / 60; }
-      if (real) { drawUnder(sctx, pond); drawTop(tctx, pond); real.render(scene, topLayer, pond.w, pond.h, pond.ripples, pond.t, themeRef.current, dpr); }
+      if (real) { drawUnder(sctx, pond, 0.8, false); drawTop(tctx, pond); real.render(scene, topLayer, pond.w, pond.h, pond.ripples, pond.t, themeRef.current, dpr, 2, pond); }
       else { drawScene(sctx, pond); water!.render(scene, pond.w, pond.h, pond.ripples, pond.t, themeRef.current, dpr); }
       if (visible && !reduced) raf = requestAnimationFrame(loop);
     };

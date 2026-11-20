@@ -10,7 +10,8 @@
 //      caustics from the moving surface play on the floor; the surface reflects a soft sky (Fresnel) and
 //      catches sun glints. Floating things (pads) are drawn last, above the water.
 //   4. Optional finishing look: a 4-colour ordered dither, for stylised sites.
-import type { Ripple } from "./sim";
+import type { Pond, Ripple } from "./sim";
+import { createFishRenderer } from "./fishgl";
 
 const VERT = `#version 300 es
 in vec2 p; out vec2 uv; void main(){ uv = p * .5 + .5; gl_Position = vec4(p, 0, 1); }`;
@@ -45,7 +46,8 @@ void main(){
 const COMPOSE = `#version 300 es
 precision highp float;
 in vec2 uv; out vec4 o;
-uniform sampler2D waves, fish, top;
+uniform sampler2D waves, fish, top, fishgl;
+uniform float useGL;
 uniform vec2 res, pond, wtexel;
 uniform float t, px, mode, bright, sand, causticAmt, clarity, waveAmt;
 uniform vec3 waterDeep, waterShallow, tint, c0, c1, c2, c3;
@@ -93,7 +95,7 @@ vec3 sandFloor(vec2 q, out float height){
 
 // a bed of rounded river pebbles: each its own tone (sage, slate, sand, umber), soft dark gaps
 vec3 pebbleFloor(vec2 q, out float height){
-  vec2 p = q * 3.6, i = floor(p), f = fract(p); float d1 = 9., d2 = 9.; vec2 id = vec2(0);
+  vec2 p = q * (2.6 + .9 * step(.5, vnoise(q * .3))), i = floor(p), f = fract(p); float d1 = 9., d2 = 9.; vec2 id = vec2(0);
   for (int y = -1; y <= 1; y++) for (int x = -1; x <= 1; x++){
     vec2 g = vec2(x, y), c = g + .2 + .6 * h22(i + g);
     float d = length((f - c) * vec2(1., 1.15 + .3 * h21(i + g)));
@@ -101,10 +103,10 @@ vec3 pebbleFloor(vec2 q, out float height){
   }
   float r = h21(id), r2 = h21(id + 7.);
   vec3 col = r < .3 ? vec3(.55,.6,.52) : r < .55 ? vec3(.46,.5,.5) : r < .8 ? vec3(.66,.62,.52) : vec3(.48,.4,.32);
-  col = mix(col, vec3(dot(col, vec3(.33))), .35) * (.85 + .3 * r2);
-  float gap = smoothstep(.04, .3, d2 - d1);
-  float dome = sqrt(max(0., 1. - d1 * 1.35));
-  col = mix(vec3(.16, .2, .19), col * (.75 + .35 * dome), gap);
+  col = mix(col, vec3(dot(col, vec3(.33))), .5) * (.9 + .2 * r2);
+  float gap = smoothstep(.02, .35, d2 - d1);
+  float dome = sqrt(max(0., 1. - d1 * 1.3));
+  col = mix(col * .7, col * (.85 + .2 * dome), gap);
   col *= .9 + .12 * vnoise(q * 30.);                   // speckle
   height = dome * gap;
   return col;
@@ -201,21 +203,33 @@ void main(){
   float fh2; floorColour(q + refrFloor * 6. + vec2(.02, .0), fh2); float fh3; floorColour(q + refrFloor * 6. + vec2(.0, .02), fh3);
   vec3 fn = normalize(vec3((fh - fh2) * 3., (fh - fh3) * 3., 1.));
   fl = lin(fl) * (.45 + .6 * max(0., dot(fn, L))) * .9;
-  bool lagoon = sand > .5;
-  vec3 cau = lagoon ? lagoonCaustic(q * (sand > 1.5 ? 1.1 : 1.45), n.xy) : caustic(q * .3, n.xy);
+  bool lagoon = sand > .5 && sand < 1.5;
+  vec3 cau = sand > .5 ? lagoonCaustic(q * (lagoon ? 1.45 : .9), n.xy) : caustic(q * .3, n.xy);
   fl *= sand > .5 && sand < 1.5 ? .62 + .25 * vnoise(q * .5 + t * .05) : 1.;          // cell interiors sit in shade
   if (!lagoon) fl += cau * lin(vec3(.6, .66, .64)) * .62 * causticAmt * (1. - depth * .5);
 
   // fish and their shadows, drawn in 2D, seen through the water
   vec4 f = texture(fish, clamp(st + refrFish, vec2(.001), vec2(.999)));
   vec3 frgb = lin(f.rgb);
+  if (useGL > .5){
+    // floor shadows of the GPU-drawn koi: their own silhouettes, offset by the sun and softened
+    vec2 so = vec2(.012, .02) * vec2(pond.y / pond.x, 1.);
+    float sa = 0.;
+    for (int k = 0; k < 8; k++){ float a = float(k) * .785; sa += texture(fishgl, clamp(st + refrFloor * .4 - so + vec2(cos(a), sin(a)) * .006, vec2(.001), vec2(.999))).a; }
+    sa /= 8.;
+    // pad and petal shadows come from the 2D layer (dark, with alpha)
+    vec3 floorLit = mix(fl, frgb, f.a) * (1. - sa * .6);
+    vec4 g2 = texture(fishgl, clamp(st + refrFish, vec2(.001), vec2(.999)));
+    vec3 fishCol = lin(g2.rgb / max(g2.a, .001));
+    fl = floorLit; f = vec4(fishCol, g2.a); frgb = fishCol;
+  }
   // the fish layer's alpha is how close to the surface it is; shadows are dark with low alpha
   vec3 under = mix(fl, frgb * (1. + cau * .25), f.a);
   float fishNear = f.a;
 
   // absorption with depth (red goes first) and light scattered back from the water body
   vec3 absorb = vec3(2.4, .92, .78);
-  float isFish = fishNear * step(.12, dot(f.rgb, vec3(.33)));   // shadows (dark) stay on the floor
+  float isFish = useGL > .5 ? f.a : fishNear * step(.12, dot(f.rgb, vec3(.33)));   // shadows (dark) stay on the floor
   float path = mix(depth, .02, isFish);
   vec3 trans = exp(-absorb * path * 1.7 * clarity);
   vec3 scatter = lin(mix(waterShallow, waterDeep, clamp(depth * .9, 0., 1.)) * tint);
@@ -276,6 +290,7 @@ export function createRealWater(canvas: HTMLCanvasElement) {
     return p;
   };
   const wave = compile(VERT, WAVE), compose = compile(VERT, COMPOSE);
+  const fishR = createFishRenderer(gl);
   const quad = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, quad);
   gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW);
   const vao = gl.createVertexArray(); gl.bindVertexArray(vao);
@@ -304,7 +319,8 @@ export function createRealWater(canvas: HTMLCanvasElement) {
   const U = (p: WebGLProgram, n: string) => gl.getUniformLocation(p, n);
 
   return {
-    render(fish: HTMLCanvasElement, top: HTMLCanvasElement, pondW: number, pondH: number, ripples: Ripple[], t: number, look: WaterLook, dpr: number, steps = 2) {
+    render(fish: HTMLCanvasElement, top: HTMLCanvasElement, pondW: number, pondH: number, ripples: Ripple[], t: number, look: WaterLook, dpr: number, steps = 2, pond?: Pond) {
+      if (pond) fishR.render(pond, canvas.width, canvas.height);
       sizeWaves(pondW / pondH);
       // new disturbances become drops in the height field
       let n = 0;
@@ -316,6 +332,7 @@ export function createRealWater(canvas: HTMLCanvasElement) {
         drops.set([r.x / pondW, r.y / pondH, (rad * short) / pondW, str * r.power * 0.05], n * 4); n++;
       }
       // wave steps (more steps = faster travelling rings)
+      gl.bindVertexArray(vao);
       gl.useProgram(wave); gl.viewport(0, 0, WW, WH);
       gl.uniform2f(U(wave, "texel"), 1 / WW, 1 / WH);
       for (let i = 0; i < steps; i++) {
@@ -327,9 +344,11 @@ export function createRealWater(canvas: HTMLCanvasElement) {
       }
       gl.bindFramebuffer(gl.FRAMEBUFFER, null);
       // composite
+      gl.bindVertexArray(vao);
       gl.useProgram(compose); gl.viewport(0, 0, canvas.width, canvas.height);
       gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, states[cur]); gl.uniform1i(U(compose, "waves"), 0);
       gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, fishTex); gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, fish); gl.uniform1i(U(compose, "fish"), 1);
+      gl.activeTexture(gl.TEXTURE3); gl.bindTexture(gl.TEXTURE_2D, fishR.texture); gl.uniform1i(U(compose, "fishgl"), 3); gl.uniform1f(U(compose, "useGL"), pond ? 1 : 0);
       gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D, topTex); gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, top); gl.uniform1i(U(compose, "top"), 2);
       gl.uniform2f(U(compose, "res"), canvas.width, canvas.height); gl.uniform2f(U(compose, "pond"), pondW, pondH); gl.uniform2f(U(compose, "wtexel"), 1 / WW, 1 / WH);
       gl.uniform1f(U(compose, "t"), t); gl.uniform1f(U(compose, "px"), Math.max(1, look.pixel * dpr)); gl.uniform1f(U(compose, "mode"), look.mode === "dither" ? 0 : 1);

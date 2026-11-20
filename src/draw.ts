@@ -89,7 +89,7 @@ function shade(hexc: string, k: number) {
 }
 
 /** Everything under the surface: shadows on the floor, then the fish (deepest first). */
-export function drawUnder(ctx: CanvasRenderingContext2D, pond: Pond, shadow = 0.8) {
+export function drawUnder(ctx: CanvasRenderingContext2D, pond: Pond, shadow = 0.8, fish = true) {
   const W = ctx.canvas.width, H = ctx.canvas.height, sx = W / pond.w, sy = H / pond.h;
   ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.clearRect(0, 0, W, H); ctx.setTransform(sx, 0, 0, sy, 0, 0);
   const fishes = [...pond.fish].sort((a, b) => b.depth - a.depth);
@@ -98,7 +98,7 @@ export function drawUnder(ctx: CanvasRenderingContext2D, pond: Pond, shadow = 0.
 
   // shadows: fish near the surface throw softer shadows further away; pads shade the floor too
   ctx.save();
-  for (const f of fishes) {
+  if (fish) for (const f of fishes) {
     const g = frames.get(f)!, off = unit * (0.1 + (1 - f.depth) * 0.3);
     ctx.filter = `blur(${Math.max(0.8, unit * (0.025 + (1 - f.depth) * 0.04) * sx)}px)`;
     ctx.fillStyle = `rgba(0,20,25,${shadow * (0.6 + f.depth * 0.3)})`;
@@ -109,6 +109,7 @@ export function drawUnder(ctx: CanvasRenderingContext2D, pond: Pond, shadow = 0.
   ctx.fillStyle = `rgba(0,0,0,${shadow * 0.5})`;
   for (const p of pond.petals) { petalPath(ctx, p.x + unit * 0.06, p.y + unit * 0.09, p.r, p.angle); ctx.fill(); }
   ctx.restore();
+  if (!fish) return;
 
   for (const f of fishes) {
     const g = frames.get(f)!, v = f.variety, fade = 1;

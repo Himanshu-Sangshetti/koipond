@@ -17,7 +17,7 @@ const VERT = `#version 300 es
 in vec2 p; out vec2 uv; void main(){ uv = p * .5 + .5; gl_Position = vec4(p, 0, 1); }`;
 
 // --- 1. wave equation step -------------------------------------------------------------------------
-const WAVE = `#version 300 es
+export const WAVE = `#version 300 es
 precision highp float;
 in vec2 uv; out vec4 o;
 uniform sampler2D state; uniform vec2 texel;
@@ -45,11 +45,14 @@ void main(){
 }`;
 
 // --- 2+3. pond floor, refraction, absorption, caustics, sky, sun -------------------------------------
-const COMPOSE = `#version 300 es
+export const COMPOSE = `#version 300 es
 precision highp float;
 in vec2 uv; out vec4 o;
-uniform sampler2D waves, fish, top, fishgl;
-uniform float useGL, fishPremul;
+uniform sampler2D waves, fish, top, fishgl, props;
+uniform float useGL, fishPremul, fishLinear, useProps, flipT, bakeMode, useBake;
+uniform sampler2D floorTex;
+// three.js keeps canvas and render-target images with their top row at v = 1; the pond's y runs down
+vec4 T(sampler2D s, vec2 v){ return texture(s, flipT > .5 ? vec2(v.x, 1. - v.y) : v); }
 uniform vec2 res, pond, wtexel;
 uniform float t, px, mode, bright, sand, causticAmt, clarity, waveAmt, film;
 uniform vec3 absorbK;
@@ -60,6 +63,7 @@ vec2 h22(vec2 p){ float n = h21(p); return vec2(n, h21(p + n)); }
 float vnoise(vec2 p){ vec2 i = floor(p), f = fract(p); f = f*f*(3.-2.*f);
   return mix(mix(h21(i), h21(i+vec2(1,0)), f.x), mix(h21(i+vec2(0,1)), h21(i+1.), f.x), f.y); }
 float fbm(vec2 p){ float s = 0., a = .5; for (int i = 0; i < 5; i++){ s += a * vnoise(p); p = p * 2.03 + 17.1; a *= .5; } return s; }
+float fbm2(vec2 p){ return vnoise(p) * .62 + vnoise(p * 2.03 + 17.1) * .38; }
 
 // stones: voronoi cells, each a rounded pebble with its own tone; returns colour + height (for shading)
 vec4 stones(vec2 p){
@@ -160,8 +164,7 @@ vec3 lagoonCaustic(vec2 p, vec2 bend){
   p += bend * .12;
   p += (vec2(fbm(p * .3 + t * .04), fbm(p * .3 - t * .035 + 6.)) - .5) * 1.8;
   float swell = .55 + .7 * vnoise(p * .9 + vec2(t * .2, -t * .16));
-  vec3 c = vec3(webCrisp(p + vec2(.008, 0)), webCrisp(p), webCrisp(p - vec2(.008, 0))) * swell;
-  return c;
+  return vec3(webCrisp(p)) * swell;
 }
 vec3 caustic(vec2 p, vec2 bend){
   p += bend * 3.;
@@ -188,44 +191,60 @@ void main(){
   float hl = texture(waves, st - vec2(wtexel.x, 0)).r, hr = texture(waves, st + vec2(wtexel.x, 0)).r;
   float hd = texture(waves, st - vec2(0, wtexel.y)).r, hu = texture(waves, st + vec2(0, wtexel.y)).r;
   vec2 g = vec2(hr - hl, hu - hd) * 70.;
+  // bake pass: write the lit floor (static) once, then exit
+  if (bakeMode > .5){
+    float bh; vec3 bf = floorColour(q, bh);
+    float bh2; floorColour(q + vec2(.02, .0), bh2); float bh3; floorColour(q + vec2(.0, .02), bh3);
+    vec3 bn = normalize(vec3((bh - bh2) * 3., (bh - bh3) * 3., 1.));
+    vec3 BL = normalize(vec3(-.5, -.6, .8));
+    float bd = .55 + .35 * fbm(q * .18 + 2.) + .2 * smoothstep(.2, .9, length((st - .5) * vec2(1.3, 1.)));
+    o = vec4(srgb(lin(bf) * (.45 + .6 * max(0., dot(bn, BL))) * .9), bd);
+    return;
+  }
+  // fine wind ripples: two cheap noise octaves, differenced for a slope
   vec2 wq = st * pond / unit * 9.;
-  float w1 = fbm(wq + vec2(t * .25, t * .11)), w2 = fbm(wq * 1.7 - vec2(t * .18, -t * .21));
-  g *= 1.;
-  g += waveAmt * (vec2(fbm(wq + .05 + vec2(t*.25,t*.11)) - w1, fbm(wq + vec2(.0,.05) + vec2(t*.25,t*.11)) - w1) * 1.1
-      + vec2(fbm(wq*1.7 + .05 - vec2(t*.18,-t*.21)) - w2, fbm(wq*1.7 + vec2(.0,.05) - vec2(t*.18,-t*.21)) - w2) * .7);
+  vec2 wa = wq + vec2(t * .25, t * .11), wb = wq * 1.7 - vec2(t * .18, -t * .21);
+  float w1 = fbm2(wa), w2 = fbm2(wb);
+  g += waveAmt * (vec2(fbm2(wa + vec2(.05, 0)) - w1, fbm2(wa + vec2(0, .05)) - w1) * 1.1 + vec2(fbm2(wb + vec2(.05, 0)) - w2, fbm2(wb + vec2(0, .05)) - w2) * .7) * 1.6;
   vec3 n = normalize(vec3(-g * 1.5, 1.));
 
   // depth of water over the floor: deeper in the middle and in a few hollows
-  float depth = .55 + .35 * fbm(q * .18 + 2.) + .2 * smoothstep(.2, .9, length((st - .5) * vec2(1.3, 1.)));
+  float depth = useBake > .5 ? texture(floorTex, vec2(st.x, 1. - st.y)).a : .55 + .35 * fbm(q * .18 + 2.) + .2 * smoothstep(.2, .9, length((st - .5) * vec2(1.3, 1.)));
   depth *= sand > .5 ? .55 : 1.;
 
   // refraction: the floor and the fish shift with the surface slope (floor more, it is further down)
   vec2 refrFloor = n.xy * .045 * depth, refrFish = n.xy * .02;
-  float fh; vec3 fl = floorColour(q + refrFloor * 6., fh);
-  // light the floor stones from the upper left, then caustics
-  vec3 L = normalize(vec3(-.5, -.6, .8));
-  float fh2; floorColour(q + refrFloor * 6. + vec2(.02, .0), fh2); float fh3; floorColour(q + refrFloor * 6. + vec2(.0, .02), fh3);
-  vec3 fn = normalize(vec3((fh - fh2) * 3., (fh - fh3) * 3., 1.));
-  fl = lin(fl) * (.45 + .6 * max(0., dot(fn, L))) * .9;
+  vec3 fl;
+  if (useBake > .5) {
+    // the lit floor was baked once; refraction just shifts where we read it
+    vec2 fs = clamp(st + refrFloor * unit / pond, vec2(.001), vec2(.999)); fl = lin(texture(floorTex, vec2(fs.x, 1. - fs.y)).rgb);
+  } else {
+    float fh; fl = floorColour(q + refrFloor * 6., fh);
+    vec3 L = normalize(vec3(-.5, -.6, .8));
+    float fh2; floorColour(q + refrFloor * 6. + vec2(.02, .0), fh2); float fh3; floorColour(q + refrFloor * 6. + vec2(.0, .02), fh3);
+    vec3 fn = normalize(vec3((fh - fh2) * 3., (fh - fh3) * 3., 1.));
+    fl = lin(fl) * (.45 + .6 * max(0., dot(fn, L))) * .9;
+  }
   bool lagoon = sand > .5 && sand < 1.5;
   vec3 cau = lagoonCaustic(q * (lagoon ? 1.45 : .9), n.xy);
   fl *= sand > .5 && sand < 1.5 ? .62 + .25 * vnoise(q * .5 + t * .05) : 1.;          // cell interiors sit in shade
   if (!lagoon) fl += cau * lin(vec3(.6, .66, .64)) * .62 * causticAmt * (1. - depth * .5);
 
   // fish and their shadows, drawn in 2D, seen through the water
-  vec4 f = texture(fish, clamp(st + refrFish, vec2(.001), vec2(.999)));
+  vec4 f = T(fish, clamp(st + refrFish, vec2(.001), vec2(.999)));
   vec3 frgb = lin(f.rgb);
   float shadowA = 0.;
   if (useGL > .5){
     // floor shadows of the GPU-drawn koi: their own silhouettes, offset by the sun and softened
     vec2 so = vec2(.012, .02) * vec2(pond.y / pond.x, 1.);
     float sa = 0.;
-    for (int k = 0; k < 8; k++){ float a = float(k) * .785; sa += texture(fishgl, clamp(st + refrFloor * .4 - so + vec2(cos(a), sin(a)) * .006, vec2(.001), vec2(.999))).a; }
+    for (int k = 0; k < 8; k++){ float a = float(k) * .785; sa += T(fishgl, clamp(st + refrFloor * .4 - so + vec2(cos(a), sin(a)) * .006, vec2(.001), vec2(.999))).a; }
     sa /= 8.; shadowA = sa;
     // pad and petal shadows come from the 2D layer (dark, with alpha)
     vec3 floorLit = mix(fl, frgb, f.a) * (1. - sa * .6);
-    vec4 g2 = texture(fishgl, clamp(st + refrFish, vec2(.001), vec2(.999)));
-    vec3 fishCol = lin(fishPremul > .5 ? g2.rgb / max(g2.a, .001) : g2.rgb);
+    vec4 g2 = T(fishgl, clamp(st + refrFish, vec2(.001), vec2(.999)));
+    vec3 fishRaw = fishPremul > .5 ? g2.rgb / max(g2.a, .001) : g2.rgb;
+    vec3 fishCol = fishLinear > .5 ? fishRaw : lin(fishRaw);
     fl = floorLit; f = vec4(fishCol, g2.a); frgb = fishCol;
   }
   // the fish layer's alpha is how close to the surface it is; shadows are dark with low alpha
@@ -242,13 +261,13 @@ void main(){
   // in clear shallow sea the light web is brighter than anything: add it after the water colour
   if (lagoon) col += cau * lin(vec3(.78, .96, .92)) * .5 * causticAmt * (1. - isFish * .7) * (1. - depth * .4);
   // sunlight comes through unevenly: broad brighter and darker patches drift slowly
-  float dapple = fbm(st * pond / unit * (film > .5 ? .35 : .9) + vec2(t * .015, -t * .01));
+  float dapple = fbm2(st * pond / unit * (film > .5 ? .35 : .9) + vec2(t * .015, -t * .01));
   col *= film > .5 ? .5 + .75 * smoothstep(.3, .72, dapple) : .78 + .5 * smoothstep(.25, .8, dapple);
 
   // surface: soft sky reflection by Fresnel, drifting cloud light, and sun glints on the ripples
   vec3 V = vec3(0, 0, 1);
   float fres = .02 + .98 * pow(1. - max(0., dot(n, V)), 5.);
-  vec3 sky = lin(mix(vec3(.62, .74, .78), vec3(.88, .92, .9), fbm(st * 2.5 + vec2(t * .01, 0))));
+  vec3 sky = lin(mix(vec3(.62, .74, .78), vec3(.88, .92, .9), fbm2(st * 2.5 + vec2(t * .01, 0))));
   col = mix(col, sky, clamp(fres * 1.3 + .015, 0., .3));
   vec3 S = normalize(vec3(.35, -.45, .82));
   float spec = pow(max(0., dot(reflect(-S, n), V)), 380.);
@@ -258,7 +277,13 @@ void main(){
   float ripL = length(vec2(hr - hl, hu - hd)) * 70.;
   col += lin(vec3(.92, 1., .96)) * smoothstep(.12, .8, ripL) * .22;
 
-  vec4 tp = texture(top, st);
+  vec4 tp = T(top, st);
+  if (useProps > .5){
+    // lit 3D pads and rocks (a linear render target, premultiplied) sit under the 2D floaters
+    vec4 pr = T(props, st);
+    vec3 prc = srgb(pr.rgb / max(pr.a, .001));
+    tp = vec4(mix(prc, tp.rgb, tp.a), tp.a + pr.a * (1. - tp.a));
+  }
 
   // gentle vignette, exposure
   col *= 1. - .35 * pow(length((st - .5) * vec2(1.1, 1.)), 2.2);
@@ -282,12 +307,13 @@ void main(){
     float ring = smoothstep(.35, .55, length(gw)) * (1. - smoothstep(.55, 1.1, length(gw)) * .5);
     wc = mix(wc, CREAM, ring * .75);
     // shadows of koi and pads: flat indigo
-    vec4 sh = texture(fish, clamp(st, vec2(.001), vec2(.999)));
+    vec4 sh = T(fish, clamp(st, vec2(.001), vec2(.999)));
     wc = mix(wc, INK, max(shadowA * .55, (1. - step(.12, dot(sh.rgb, vec3(.33)))) * sh.a * .45));
     // koi: their colours in three flat tone bands, with an ink outline
     vec2 px2 = 1.6 / res;
-    vec4 fk = texture(fishgl, clamp(st + refrFish, vec2(.001), vec2(.999)));
+    vec4 fk = T(fishgl, clamp(st + refrFish, vec2(.001), vec2(.999)));
     vec3 fc = fishPremul > .5 ? fk.rgb / max(fk.a, .001) : fk.rgb;
+    if (fishLinear > .5) fc = srgb(fc);
     float fl0 = dot(fc, vec3(.299, .587, .114));
     // snap to the print palette (cream, vermilion, orange, gold, ink), then shade in two flat bands
     vec3 P[5] = vec3[5](CREAM, vec3(.84, .25, .12), vec3(.92, .47, .16), vec3(.9, .66, .24), INK);
@@ -296,7 +322,7 @@ void main(){
     for (int k = 0; k < 5; k++){ float d = distance(fn2, P[k] / max(dot(P[k], vec3(.299, .587, .114)), .05) * .6) + abs(fl0 - dot(P[k], vec3(.299, .587, .114))) * .8; if (d < best){ best = d; fq = P[k]; } }
     fq *= fl0 < dot(fq, vec3(.299, .587, .114)) * .72 ? .8 : 1.;
     float aN = 0., aX = 1.;
-    for (int k = 0; k < 4; k++){ vec2 o = vec2(k == 0 ? 1. : k == 1 ? -1. : 0., k == 2 ? 1. : k == 3 ? -1. : 0.) * px2; float a2 = texture(fishgl, clamp(st + refrFish + o, vec2(.001), vec2(.999))).a; aN = max(aN, a2); aX = min(aX, a2); }
+    for (int k = 0; k < 4; k++){ vec2 o = vec2(k == 0 ? 1. : k == 1 ? -1. : 0., k == 2 ? 1. : k == 3 ? -1. : 0.) * px2; float a2 = T(fishgl, clamp(st + refrFish + o, vec2(.001), vec2(.999))).a; aN = max(aN, a2); aX = min(aX, a2); }
     // fins are thinner than the body (part alpha): a pale membrane, then the solid body on top
     float finM = smoothstep(.12, .3, fk.a) * (1. - step(.75, fk.a));
     vec3 ic = mix(wc, mix(wc, CREAM, .62), finM);
@@ -304,7 +330,7 @@ void main(){
     ic = mix(ic, INK, smoothstep(.3, .6, aN - aX));
     // floating things: pads and petals posterised, outlined
     float tN = 0., tX = 1.;
-    for (int k = 0; k < 4; k++){ vec2 o = vec2(k == 0 ? 1. : k == 1 ? -1. : 0., k == 2 ? 1. : k == 3 ? -1. : 0.) * px2; float a2 = texture(top, st + o).a; tN = max(tN, a2); tX = min(tX, a2); }
+    for (int k = 0; k < 4; k++){ vec2 o = vec2(k == 0 ? 1. : k == 1 ? -1. : 0., k == 2 ? 1. : k == 3 ? -1. : 0.) * px2; float a2 = T(top, st + o).a; tN = max(tN, a2); tX = min(tX, a2); }
     vec3 tc = tp.rgb; float tl = dot(tc, vec3(.299, .587, .114));
     tc = tc * (tl < .3 ? .8 : tl < .6 ? 1. : 1.08);
     ic = mix(ic, tc, step(.5, tp.a));
@@ -339,11 +365,11 @@ void main(){
   }
 }`;
 
-const hex = (h: string) => { const n = parseInt(h.replace("#", ""), 16); return [((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255]; };
+export const hex = (h: string) => { const n = parseInt(h.replace("#", ""), 16); return [((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255]; };
 
 export interface WaterLook { mode: "dither" | "color" | "ink"; palette: [string, string, string, string]; deep: string; shallow: string; tint?: string; pixel: number; bright?: number; floor?: "sand" | "stones" | "pebbles"; caustics?: number; clarity?: number; waves?: number; film?: boolean; absorb?: [number, number, number] }
 
-const STRENGTH: Record<Ripple["kind"], [number, number]> = { tap: [0.035, 2.2], drop: [0.012, 0.7], nibble: [0.01, 0.5], wake: [0.012, 0.45] }; // radius (of short side), strength
+export const STRENGTH: Record<Ripple["kind"], [number, number]> = { tap: [0.035, 2.2], drop: [0.012, 0.7], nibble: [0.01, 0.5], wake: [0.012, 0.45] }; // radius (of short side), strength
 
 export function createRealWater(canvas: HTMLCanvasElement) {
   const gl = canvas.getContext("webgl2", { antialias: false, premultipliedAlpha: false, preserveDrawingBuffer: true });

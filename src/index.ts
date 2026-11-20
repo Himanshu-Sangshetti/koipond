@@ -3,3 +3,4 @@ export { Pond, VARIETIES, type Fish, type PondOptions, type Variety, type V } fr
 export { drawUnder, drawTop } from "./draw";
 export { createRealWater, type WaterLook } from "./water";
 export { createFishRenderer } from "./fishgl";
+export { createStage } from "./stage";

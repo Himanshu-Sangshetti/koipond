@@ -169,7 +169,7 @@ export function drawUnder(ctx: CanvasRenderingContext2D, pond: Pond, shadow = 0.
 }
 
 /** Things floating on the surface: food and lily pads. */
-export function drawTop(ctx: CanvasRenderingContext2D, pond: Pond, props?: HTMLCanvasElement) {
+export function drawTop(ctx: CanvasRenderingContext2D, pond: Pond, props?: HTMLCanvasElement | true) {
   const W = ctx.canvas.width, H = ctx.canvas.height, sx = W / pond.w, sy = H / pond.h;
   ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.clearRect(0, 0, W, H); ctx.setTransform(sx, 0, 0, sy, 0, 0);
   const unit = Math.min(pond.w, pond.h) * 0.11;
@@ -206,7 +206,7 @@ export function drawTop(ctx: CanvasRenderingContext2D, pond: Pond, props?: HTMLC
   }
   if (props) {
     // lit 3D pads and rocks, then the flowers on top of their pads
-    ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.drawImage(props, 0, 0, W, H); ctx.restore();
+    if (props !== true) { ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.drawImage(props, 0, 0, W, H); ctx.restore(); }
     for (const p of pond.pads) if (p.flower) drawLily(ctx, p.x + Math.cos(p.angle + Math.PI) * p.r * 0.15, p.y + Math.sin(p.angle + Math.PI) * p.r * 0.15, p.r * 0.48, p.angle * 3, scheme(pond));
   } else {
     for (const p of pond.pads) drawPad(ctx, p, scheme(pond));

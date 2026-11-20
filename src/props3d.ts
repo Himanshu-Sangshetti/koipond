@@ -87,10 +87,9 @@ function rockGeometry(seed: number, tones: string[]) {
   return geo;
 }
 
-export function createProps3D() {
-  const canvas = document.createElement("canvas");
-  const renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true, premultipliedAlpha: true, preserveDrawingBuffer: true });
-  renderer.setPixelRatio(1); renderer.setClearColor(0, 0); renderer.outputColorSpace = THREE.SRGBColorSpace;
+export function createProps3D(renderer: THREE.WebGLRenderer) {
+  // draws into its own render target on the shared renderer; the stage samples it directly
+  const target = new THREE.WebGLRenderTarget(1, 1, { samples: 4, depthBuffer: true });
   const scene = new THREE.Scene();
   const pmrem = new THREE.PMREMGenerator(renderer);
   scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture; scene.environmentIntensity = 0.25;
@@ -101,11 +100,11 @@ export function createProps3D() {
   let rocks: { key: string; group: THREE.Group } | null = null, style = "";
 
   return {
-    canvas,
+    texture: target.texture,
     frame: 0,
     render(pond: Pond, w: number, h: number, rockList: { x: number; y: number; rx: number; ry: number; a: number }[]) {
-      if ((this.frame++ & 1) === 1 && canvas.width === w) return; // pads drift slowly: half rate is plenty
-      if (canvas.width !== w || canvas.height !== h) renderer.setSize(w, h, false);
+      if ((this.frame++ & 1) === 1 && target.width === w) return; // pads drift slowly: half rate is plenty
+      if (target.width !== w || target.height !== h) target.setSize(w, h);
       cam.left = 0; cam.right = pond.w; cam.top = pond.h; cam.bottom = 0; cam.updateProjectionMatrix(); // y up; pond y is flipped below
       const st = PAD_TONES[pond.style] ? pond.style : "natural";
       if (st !== style) { for (const [, m] of pads) { scene.remove(m); (m.material as THREE.Material).dispose(); } pads.clear(); if (rocks) { scene.remove(rocks.group); rocks = null; } style = st; }
@@ -134,8 +133,8 @@ export function createProps3D() {
         });
         scene.add(group); rocks = { key, group };
       }
-      renderer.render(scene, cam);
+      renderer.setRenderTarget(target); renderer.setClearColor(0x000000, 0); renderer.clear(); renderer.render(scene, cam); renderer.setRenderTarget(null);
     },
-    dispose() { renderer.dispose(); pmrem.dispose(); },
+    dispose() { target.dispose(); pmrem.dispose(); },
   };
 }

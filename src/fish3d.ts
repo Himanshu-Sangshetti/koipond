@@ -108,13 +108,10 @@ function strip(n: number) {
   return geo;
 }
 
-export function createFish3D() {
-  const canvas = document.createElement("canvas");
-  const renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true, premultipliedAlpha: true, preserveDrawingBuffer: true });
-  renderer.setClearColor(0x000000, 0);
-  renderer.outputColorSpace = THREE.SRGBColorSpace; renderer.setPixelRatio(1);
-  renderer.toneMapping = THREE.NoToneMapping;
-  const scene = new THREE.Scene();
+export function createFish3D(renderer: THREE.WebGLRenderer) {
+  // draws into its own render target on the shared renderer; the stage samples it directly
+  const target = new THREE.WebGLRenderTarget(1, 1, { samples: 4, depthBuffer: true });
+    const scene = new THREE.Scene();
   const pmrem = new THREE.PMREMGenerator(renderer);
   scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
   scene.environmentIntensity = 0.18;
@@ -152,9 +149,9 @@ export function createFish3D() {
 
   const water = new THREE.Color("#3b5e58");
   return {
-    canvas,
+    texture: target.texture,
     render(pond: Pond, w: number, h: number) {
-      if (canvas.width !== w || canvas.height !== h) renderer.setSize(w, h, false);
+      if (target.width !== w || target.height !== h) target.setSize(w, h);
       cam.left = 0; cam.right = pond.w; cam.top = 0; cam.bottom = pond.h; cam.updateProjectionMatrix();
       const alive = new Set<number>();
       for (const f of pond.fish) {
@@ -210,8 +207,8 @@ export function createFish3D() {
           p.needsUpdate = true; }
       }
       for (const [id, k] of kois) if (!alive.has(id)) { scene.remove(k.body, k.tail, ...k.fins); kois.delete(id); }
-      renderer.render(scene, cam);
+      renderer.setRenderTarget(target); renderer.setClearColor(0x000000, 0); renderer.clear(); renderer.render(scene, cam); renderer.setRenderTarget(null);
     },
-    dispose() { renderer.dispose(); pmrem.dispose(); },
+    dispose() { target.dispose(); pmrem.dispose(); },
   };
 }

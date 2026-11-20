@@ -13,6 +13,8 @@ import { createRealWater } from "./water";
 import { Pond, type V } from "./sim";
 
 export const LOOKS: Record<string, Look> = {
+  garden: { mode: "color", palette: ["#000", "#000", "#000", "#000"], deep: "#25464a", shallow: "#5a8a80", tint: "#ffffff", pixel: 1, floor: "pebbles", caustics: .45, clarity: 1.25, waves: 1, bright: 1.1 },
+  lagoon: { mode: "color", palette: ["#000", "#000", "#000", "#000"], deep: "#08758c", shallow: "#25b8b4", tint: "#ffffff", pixel: 1, floor: "sand", caustics: 1.2, clarity: 1.0, waves: 1.3, bright: .85 },
   violet: { mode: "dither", palette: ["#09080f", "#2a2160", "#6c5ce7", "#e4dfff"], deep: "#05040a", shallow: "#15122a", pixel: 2 },
   ink: { mode: "dither", palette: ["#0c0c0c", "#3a3a3a", "#9a9a9a", "#f2f0ea"], deep: "#050505", shallow: "#1b1b1b", pixel: 2 },
   ember: { mode: "dither", palette: ["#0d0806", "#5a1f12", "#e2451c", "#fde6c8"], deep: "#070403", shallow: "#1c0f0a", pixel: 2 },
@@ -35,8 +37,15 @@ export interface KoiPondProps {
   /** Fish size relative to the short side of the pond. */
   fishSize?: number;
   pads?: number;
+  petals?: number;
   seed?: number;
   interactive?: boolean;
+  /** 0..1 rain on the surface. */
+  rain?: number;
+  /** Override parts of the look: water colours, light (caustics), waves. */
+  water?: { shallow?: string; deep?: string; caustics?: number; waves?: number; clarity?: number };
+  /** Replace the pointer over the pond with a droplet that stretches as it moves through the water. */
+  cursor?: boolean;
   /** Resolution of the simulation relative to the element (lower = chunkier, faster). */
   scale?: number;
   className?: string;
@@ -44,14 +53,18 @@ export interface KoiPondProps {
 }
 
 export const KoiPond = forwardRef<KoiPondHandle, KoiPondProps>(function KoiPond(
-  { fish = 9, look = "violet", fishSize = 0.14, pads = 3, seed = 7, interactive = true, scale = 1, className, style }, ref,
+  { fish = 9, look = "violet", fishSize = 0.14, pads = 3, petals = 9, seed = 7, interactive = true, scale = 1, rain = 0, water, cursor = true, className, style }, ref,
 ) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const pondRef = useRef<Pond | null>(null);
   const sizeRef = useRef({ w: 1, h: 1 });
   // the look can change at any time without disturbing the fish
   const themeRef = useRef<Look>(LOOKS.violet);
-  themeRef.current = typeof look === "string" ? LOOKS[look] ?? LOOKS.violet : look;
+  const base = typeof look === "string" ? LOOKS[look] ?? LOOKS.violet : look;
+  themeRef.current = water ? { ...base, ...Object.fromEntries(Object.entries(water).filter(([, v]) => v !== undefined)) } : base;
+  if (pondRef.current) pondRef.current.rain = rain;
+  const rainRef = useRef(rain); rainRef.current = rain;
+  const dropRef = useRef<HTMLDivElement>(null);
 
   useImperativeHandle(ref, () => ({
     feed: (x, y) => pondRef.current?.feed(x * sizeRef.current.w, y * sizeRef.current.h),
@@ -78,7 +91,7 @@ export const KoiPond = forwardRef<KoiPondHandle, KoiPondProps>(function KoiPond(
       const r = canvas.getBoundingClientRect(), w = Math.max(1, Math.round(r.width * scale)), h = Math.max(1, Math.round(r.height * scale));
       canvas.width = Math.round(r.width * dpr); canvas.height = Math.round(r.height * dpr);
       scene.width = w; scene.height = h; topLayer.width = w; topLayer.height = h;
-      if (!pond) { pond = new Pond({ width: w, height: h, fish, fishSize, pads, seed }); pondRef.current = pond; }
+      if (!pond) { pond = new Pond({ width: w, height: h, fish, fishSize, pads, petals, seed }); pond.rain = rainRef.current; pondRef.current = pond; }
       else if (w !== pond.w || h !== pond.h) pond.resize(w, h);
       sizeRef.current = { w, h };
     };
@@ -88,14 +101,18 @@ export const KoiPond = forwardRef<KoiPondHandle, KoiPondProps>(function KoiPond(
     // pointer → pond coordinates
     const toPond = (e: PointerEvent | MouseEvent) => { const r = canvas.getBoundingClientRect(); return { x: ((e.clientX - r.left) / r.width) * pond!.w, y: ((e.clientY - r.top) / r.height) * pond!.h, inside: e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom }; };
     let press = 0, pressAt = { x: 0, y: 0 }, lastTap = 0;
-    const onMove = (e: PointerEvent) => { if (!pond) return; const p = toPond(e); pond.setPointer(p.x, p.y, p.inside); };
+    const drop = { x: 0, y: 0, vx: 0, vy: 0, tx: 0, ty: 0, shown: false, down: false };
+    const onMove = (e: PointerEvent) => {
+      if (!pond) return; const p = toPond(e); pond.setPointer(p.x, p.y, p.inside);
+      const r = canvas.getBoundingClientRect(); drop.tx = e.clientX - r.left; drop.ty = e.clientY - r.top; drop.shown = p.inside && e.pointerType !== "touch";
+    };
     const onDown = (e: PointerEvent) => {
       if (!pond) return; const p = toPond(e); if (!p.inside) return;
       const now = performance.now();
       if (now - lastTap < 320) pond.feed(p.x, p.y); else pond.ripple(p.x, p.y, "tap");
-      lastTap = now; press = now; pressAt = p;
+      lastTap = now; press = now; pressAt = p; drop.down = true;
     };
-    const onUp = () => { press = 0; };
+    const onUp = () => { press = 0; drop.down = false; };
     if (interactive) { canvas.addEventListener("pointermove", onMove); canvas.addEventListener("pointerdown", onDown); window.addEventListener("pointerup", onUp); canvas.addEventListener("pointerleave", () => pond && pond.setPointer(pond.pointer.x, pond.pointer.y, false)); }
 
     const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -107,6 +124,14 @@ export const KoiPond = forwardRef<KoiPondHandle, KoiPondProps>(function KoiPond(
       if (!pond) return;
       const dt = Math.min(0.1, (now - last) / 1000); last = now; acc += dt;
       if (press && now - press > 550) { pond.feed(pressAt.x, pressAt.y); press = 0; } // long press drops food
+      const el = dropRef.current;
+      if (el) {
+        const k = 1 - Math.exp(-dt * 22); const nx = drop.x + (drop.tx - drop.x) * k, ny = drop.y + (drop.ty - drop.y) * k;
+        drop.vx = drop.vx * 0.8 + ((nx - drop.x) / Math.max(dt, 1e-3)) * 0.2; drop.vy = drop.vy * 0.8 + ((ny - drop.y) / Math.max(dt, 1e-3)) * 0.2; drop.x = nx; drop.y = ny;
+        const sp = Math.hypot(drop.vx, drop.vy), stretch = Math.min(1.9, 1 + sp / 900), ang = Math.atan2(drop.vy, drop.vx);
+        el.style.opacity = drop.shown ? "1" : "0";
+        el.style.transform = `translate(${drop.x}px, ${drop.y}px) translate(-50%, -50%) rotate(${ang}rad) scale(${stretch * (drop.down ? 0.7 : 1)}, ${(1 / Math.sqrt(stretch)) * (drop.down ? 0.7 : 1)})`;
+      }
       while (acc >= 1 / 60) { pond.step(1 / 60); acc -= 1 / 60; }
       if (real) { drawUnder(sctx, pond); drawTop(tctx, pond); real.render(scene, topLayer, pond.w, pond.h, pond.ripples, pond.t, themeRef.current, dpr); }
       else { drawScene(sctx, pond); water!.render(scene, pond.w, pond.h, pond.ripples, pond.t, themeRef.current, dpr); }
@@ -120,7 +145,16 @@ export const KoiPond = forwardRef<KoiPondHandle, KoiPondProps>(function KoiPond(
       canvas.removeEventListener("pointermove", onMove); canvas.removeEventListener("pointerdown", onDown); window.removeEventListener("pointerup", onUp);
       pondRef.current = null;
     };
-  }, [fish, fishSize, pads, seed, interactive, scale]);
+  }, [fish, fishSize, pads, petals, seed, interactive, scale]);
 
-  return <canvas ref={canvasRef} className={className} style={{ display: "block", width: "100%", height: "100%", touchAction: "manipulation", ...style }} />;
+  return (
+    <div className={className} style={{ position: "relative", overflow: "hidden", width: "100%", height: "100%", ...style }}>
+      <canvas ref={canvasRef} style={{ display: "block", width: "100%", height: "100%", touchAction: "manipulation", cursor: cursor && interactive ? "none" : undefined }} />
+      {cursor && interactive && (
+        <div ref={dropRef} aria-hidden style={{ position: "absolute", left: 0, top: 0, width: 26, height: 26, borderRadius: "50%", pointerEvents: "none", opacity: 0, transition: "opacity .3s",
+          border: "1.5px solid rgba(255,255,255,.85)", background: "radial-gradient(circle at 35% 30%, rgba(255,255,255,.55), rgba(255,255,255,.08) 45%, rgba(255,255,255,0) 70%)",
+          boxShadow: "0 0 0 1px rgba(0,40,50,.15), 0 2px 10px rgba(0,30,40,.25)", backdropFilter: "blur(1.5px) saturate(1.4)" }} />
+      )}
+    </div>
+  );
 });

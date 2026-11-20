@@ -49,7 +49,7 @@ function tailFan(ctx: CanvasRenderingContext2D, g: Frame, f: Fish, ox = 0, oy = 
   // a forked, flowing tail: two soft lobes that follow the trailing tail chain
   const n = g.p.length, root = g.p[n - 1], mid = f.tail[1], tip = f.tail[f.tail.length - 1];
   let dx = tip.x - root.x, dy = tip.y - root.y; const d = Math.hypot(dx, dy) || 1; dx /= d; dy /= d;
-  const nx = -dy, ny = dx, spread = f.girth * 1.15, reach = f.girth * 0.7;
+  const nx = -dy, ny = dx, spread = f.girth * 1.55, reach = f.girth * 1.25;
   const lobe = (side: number) => {
     const ex = tip.x + nx * spread * side + dx * reach, ey = tip.y + ny * spread * side + dy * reach;
     ctx.moveTo(root.x + nx * f.girth * 0.12 * side + ox, root.y + ny * f.girth * 0.12 * side + oy);
@@ -65,7 +65,7 @@ function fins(ctx: CanvasRenderingContext2D, g: Frame, f: Fish, ox = 0, oy = 0) 
   const paddle = 0.5 + 0.5 * Math.sin(f.finPhase * 2.2);
   for (const side of [1, -1]) {
     const tuck = 1 - Math.max(0, side * f.turn) * 0.35;
-    for (const [u, size] of [[0.24, 1], [0.58, 0.5]] as const) {
+    for (const [u, size] of [[0.24, 1.45], [0.58, 0.6]] as const) {
       const b = onBody(g, f, u, side);
       const back = b.a + Math.PI, out = b.a + side * Math.PI / 2;
       const reach = f.girth * (0.9 + paddle * 0.5) * size * tuck;
@@ -89,7 +89,7 @@ function shade(hexc: string, k: number) {
 }
 
 /** Everything under the surface: shadows on the floor, then the fish (deepest first). */
-export function drawUnder(ctx: CanvasRenderingContext2D, pond: Pond, shadow = 0.55) {
+export function drawUnder(ctx: CanvasRenderingContext2D, pond: Pond, shadow = 0.8) {
   const W = ctx.canvas.width, H = ctx.canvas.height, sx = W / pond.w, sy = H / pond.h;
   ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.clearRect(0, 0, W, H); ctx.setTransform(sx, 0, 0, sy, 0, 0);
   const fishes = [...pond.fish].sort((a, b) => b.depth - a.depth);
@@ -100,8 +100,8 @@ export function drawUnder(ctx: CanvasRenderingContext2D, pond: Pond, shadow = 0.
   ctx.save();
   for (const f of fishes) {
     const g = frames.get(f)!, off = unit * (0.1 + (1 - f.depth) * 0.3);
-    ctx.filter = `blur(${Math.max(1, unit * (0.05 + (1 - f.depth) * 0.08) * sx)}px)`;
-    ctx.fillStyle = `rgba(0,0,0,${shadow * (0.45 + f.depth * 0.4)})`;
+    ctx.filter = `blur(${Math.max(0.8, unit * (0.025 + (1 - f.depth) * 0.04) * sx)}px)`;
+    ctx.fillStyle = `rgba(0,20,25,${shadow * (0.6 + f.depth * 0.3)})`;
     bodyPath(ctx, g, f, off * 0.45, off); ctx.fill(); tailFan(ctx, g, f, off * 0.45, off); ctx.fill(); fins(ctx, g, f, off * 0.45, off);
   }
   ctx.filter = `blur(${Math.max(1, unit * 0.12 * sx)}px)`; ctx.fillStyle = `rgba(0,0,0,${shadow * 0.75})`;
@@ -169,21 +169,61 @@ export function drawTop(ctx: CanvasRenderingContext2D, pond: Pond) {
     grd.addColorStop(0, "#e9a8b8"); grd.addColorStop(1, "#fbeef0");
     ctx.fillStyle = grd; petalPath(ctx, p.x, p.y, p.r, p.angle); ctx.fill();
   }
-  for (const p of pond.pads) {
-    // leaf: deep green, lighter towards the centre, waxy rim, radiating veins
-    const grd = ctx.createRadialGradient(p.x - p.r * 0.2, p.y - p.r * 0.25, p.r * 0.1, p.x, p.y, p.r);
-    grd.addColorStop(0, "#3d6534"); grd.addColorStop(0.65, "#2b4e27"); grd.addColorStop(1, "#1c3519");
-    ctx.fillStyle = grd; padPath(ctx, p.x, p.y, p.r, p.angle, p.notch); ctx.fill();
-    ctx.strokeStyle = "rgba(170,205,130,0.28)"; ctx.lineWidth = Math.max(0.4, p.r * 0.035); padPath(ctx, p.x, p.y, p.r * 0.97, p.angle, p.notch); ctx.stroke();
-    ctx.strokeStyle = "rgba(120,160,95,0.3)"; ctx.lineWidth = Math.max(0.3, p.r * 0.02);
-    ctx.beginPath(); for (let i = 1; i < 12; i++) { const a = p.angle + p.notch * 0.5 + (i / 12) * (TAU - p.notch); ctx.moveTo(p.x, p.y); ctx.lineTo(p.x + Math.cos(a) * p.r * 0.9, p.y + Math.sin(a) * p.r * 0.9); } ctx.stroke();
-    // mottling: a few darker blotches and a lighter centre
-    ctx.save(); padPath(ctx, p.x, p.y, p.r, p.angle, p.notch); ctx.clip();
-    for (let k = 0; k < 7; k++) { const a = p.angle * 7 + k * 2.1, rr = p.r * (0.3 + ((k * 37) % 10) / 16); ctx.fillStyle = k % 2 ? "rgba(20,40,15,0.18)" : "rgba(120,150,70,0.12)"; ctx.beginPath(); ctx.ellipse(p.x + Math.cos(a) * rr * 0.8, p.y + Math.sin(a) * rr * 0.8, p.r * 0.22, p.r * 0.14, a, 0, TAU); ctx.fill(); }
-    ctx.restore();
-    // a wet highlight
-    ctx.fillStyle = "rgba(255,255,255,0.07)"; ctx.beginPath(); ctx.ellipse(p.x - p.r * 0.3, p.y - p.r * 0.35, p.r * 0.35, p.r * 0.18, -0.5, 0, TAU); ctx.fill();
+  for (const p of pond.pads) drawPad(ctx, p);
+}
+
+const PAD_TONES = [["#5c7f45", "#3f6131", "#294522"], ["#7d8a44", "#5b6a30", "#3c4a20"], ["#8e5a44", "#6e4232", "#4c2c22"]] as const;
+
+function drawPad(ctx: CanvasRenderingContext2D, p: Pond["pads"][number]) {
+  const tone = PAD_TONES[p.tone < 0.6 ? 0 : p.tone < 0.85 ? 1 : 2];
+  // leaf body: lit toward the upper left, darker at the edge
+  const grd = ctx.createRadialGradient(p.x - p.r * 0.25, p.y - p.r * 0.3, p.r * 0.05, p.x, p.y, p.r * 1.02);
+  grd.addColorStop(0, tone[0]); grd.addColorStop(0.7, tone[1]); grd.addColorStop(1, tone[2]);
+  ctx.fillStyle = grd; padPath(ctx, p.x, p.y, p.r, p.angle, p.notch); ctx.fill();
+  ctx.save(); padPath(ctx, p.x, p.y, p.r, p.angle, p.notch); ctx.clip();
+  // veins: from the centre, gently curving, fading toward the rim
+  const n = 18;
+  for (let i = 0; i <= n; i++) {
+    const a = p.angle + p.notch * 0.5 + (i / n) * (TAU - p.notch), bend = 0.12 * Math.sin(i * 1.7);
+    const g2 = ctx.createLinearGradient(p.x, p.y, p.x + Math.cos(a) * p.r, p.y + Math.sin(a) * p.r);
+    g2.addColorStop(0, "rgba(210,225,160,0.45)"); g2.addColorStop(1, "rgba(210,225,160,0)");
+    ctx.strokeStyle = g2; ctx.lineWidth = Math.max(0.4, p.r * 0.018);
+    ctx.beginPath(); ctx.moveTo(p.x, p.y);
+    ctx.quadraticCurveTo(p.x + Math.cos(a + bend) * p.r * 0.5, p.y + Math.sin(a + bend) * p.r * 0.5, p.x + Math.cos(a) * p.r * 0.97, p.y + Math.sin(a) * p.r * 0.97); ctx.stroke();
   }
+  // rim: a slightly raised, lighter edge
+  ctx.strokeStyle = "rgba(220,230,170,0.22)"; ctx.lineWidth = Math.max(0.6, p.r * 0.05); padPath(ctx, p.x, p.y, p.r * 0.985, p.angle, p.notch); ctx.stroke();
+  ctx.fillStyle = "rgba(255,255,255,0.06)"; ctx.beginPath(); ctx.ellipse(p.x - p.r * 0.32, p.y - p.r * 0.36, p.r * 0.4, p.r * 0.2, -0.6, 0, TAU); ctx.fill();
+  ctx.restore();
+  if (p.flower) drawLily(ctx, p.x + Math.cos(p.angle + Math.PI) * p.r * 0.15, p.y + Math.sin(p.angle + Math.PI) * p.r * 0.15, p.r * 0.48, p.angle * 3);
+}
+
+/** A white water lily seen from above: two rings of pointed petals around a golden centre. */
+function drawLily(ctx: CanvasRenderingContext2D, x: number, y: number, r: number, rot: number) {
+  ctx.save();
+  ctx.shadowColor = "rgba(0,30,20,0.35)"; ctx.shadowBlur = r * 0.35; ctx.shadowOffsetX = r * 0.08; ctx.shadowOffsetY = r * 0.14;
+  for (const [ring, count, len, wid, off] of [[0, 10, 1, 0.3, 0], [1, 9, 0.78, 0.26, 0.5]] as const) {
+    for (let i = 0; i < count; i++) {
+      const a = rot + ((i + off) / count) * TAU, L = r * len, W = r * wid;
+      const tx = x + Math.cos(a) * L, ty = y + Math.sin(a) * L, nx = -Math.sin(a) * W, ny = Math.cos(a) * W;
+      const g = ctx.createLinearGradient(x, y, tx, ty);
+      g.addColorStop(0, ring ? "#fff6dc" : "#f3ecd6"); g.addColorStop(1, ring ? "#ffffff" : "#fbf8f1");
+      ctx.fillStyle = g;
+      ctx.beginPath(); ctx.moveTo(x, y);
+      ctx.quadraticCurveTo(x + Math.cos(a) * L * 0.5 + nx, y + Math.sin(a) * L * 0.5 + ny, tx, ty);
+      ctx.quadraticCurveTo(x + Math.cos(a) * L * 0.5 - nx, y + Math.sin(a) * L * 0.5 - ny, x, y);
+      ctx.fill();
+      if (ring === 0 && i === 0) { ctx.shadowColor = "transparent"; }
+    }
+  }
+  ctx.shadowColor = "transparent";
+  // golden centre with stamens
+  const c = ctx.createRadialGradient(x - r * 0.05, y - r * 0.05, 0, x, y, r * 0.28);
+  c.addColorStop(0, "#ffd75a"); c.addColorStop(1, "#e6a21e");
+  ctx.fillStyle = c; ctx.beginPath(); ctx.arc(x, y, r * 0.26, 0, TAU); ctx.fill();
+  ctx.fillStyle = "#fff0a0";
+  for (let i = 0; i < 16; i++) { const a = rot + (i / 16) * TAU; ctx.beginPath(); ctx.arc(x + Math.cos(a) * r * 0.2, y + Math.sin(a) * r * 0.2, r * 0.03, 0, TAU); ctx.fill(); }
+  ctx.restore();
 }
 
 /** Single-canvas drawing (used by the simple, stylised water). */

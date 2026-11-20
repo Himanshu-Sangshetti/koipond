@@ -4,7 +4,7 @@ A living koi pond for the web. Procedural koi swim through real-looking water: t
 pond floor, caustics drift across the stones, ripples spread and interfere, and light fades into a
 green-blue depth. Move slowly and curious koi come to look; tap the water; double-tap to feed them.
 
-![koipond, natural water](media/natural.jpg)
+![koipond, lagoon](media/lagoon.jpg)
 
 ```bash
 npm install koipond
@@ -16,7 +16,7 @@ import { KoiPond } from "koipond";
 export default function Hero() {
   return (
     <div style={{ height: "100vh" }}>
-      <KoiPond fish={10} look="natural" />
+      <KoiPond fish={10} look="lagoon" />
     </div>
   );
 }
@@ -28,16 +28,23 @@ export default function Hero() {
 |---|---|
 | Move the pointer slowly, then stop | bold koi swim over to look, and sometimes nibble at the surface |
 | Move fast near a fish | shy koi dart away |
+| Drag through the water | your pointer leaves a real wake behind it |
 | Tap the water | rings spread, bend everything under them, push petals and lily pads aside |
 | Double-tap (or long-press) | drops food; nearby koi race to it and gulp it down |
 | Nothing at all | koi drift, cruise, rest, rise and sink; the odd drop lands on the surface |
+
+![koipond, garden](media/garden.jpg)
 
 ## Props
 
 | Prop | Default | |
 |---|---|---|
 | `fish` | `9` | number of koi |
-| `look` | `"violet"` | `"natural"`, `"violet"`, `"ink"`, `"ember"`, or your own `Look` |
+| `look` | `"violet"` | `"lagoon"`, `"garden"`, `"natural"`, `"violet"`, `"ink"`, `"ember"`, or your own `Look` |
+| `water` | | override `{ shallow, deep, caustics, waves, clarity }` on any look |
+| `rain` | `0` | 0..1, drops on the surface |
+| `petals` | `9` | floating blossom petals |
+| `cursor` | `true` | the pointer becomes a droplet that stretches as it moves through the water |
 | `fishSize` | `0.14` | fish length relative to the pond's short side |
 | `pads` | `3` | floating lily pads |
 | `seed` | `7` | same seed, same pond |
@@ -82,6 +89,10 @@ floor and the fish layer. Light is absorbed with depth, red first, which gives t
 scattered back from the water body. Caustics play on the floor and lightly on the fish. The surface
 reflects a soft sky by Fresnel and catches sun glints. Lighting runs in linear light with a filmic tone
 curve. Lily pads, petals and food float above it all, unrefracted.
+
+**Looks.** `lagoon` is clear shallow sea over pale sand with a bright web of light; `garden` is a soft
+sage pond over river pebbles with water lilies; `natural` is a deeper stone pond; `violet`, `ink` and `ember`
+run the same scene through a 4-colour ordered dither for stylised sites.
 
 **Calm by default.** The simulation runs in fixed 60 Hz steps, pauses when the pond is off screen, and
 shows a still pond to people who prefer reduced motion. Without WebGL2 it falls back to a simpler water.

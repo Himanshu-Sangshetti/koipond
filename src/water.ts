@@ -47,7 +47,7 @@ precision highp float;
 in vec2 uv; out vec4 o;
 uniform sampler2D waves, fish, top;
 uniform vec2 res, pond, wtexel;
-uniform float t, px, mode, bright;
+uniform float t, px, mode, bright, sand, causticAmt, clarity, waveAmt;
 uniform vec3 waterDeep, waterShallow, tint, c0, c1, c2, c3;
 
 float h21(vec2 p){ p = fract(p * vec2(234.34, 435.345)); p += dot(p, p + 34.23); return fract(p.x * p.y); }
@@ -73,7 +73,46 @@ vec4 stones(vec2 p){
   return vec4(col * (.55 + .45 * gap), dome * gap);
 }
 
+// pale sea sand: soft wind ripples in the sand, fine grain, a few pebbles and drifts of weed
+vec3 sandFloor(vec2 q, out float height){
+  vec2 w = q + vec2(fbm(q * .4), fbm(q * .4 + 9.)) * 1.4;
+  float ripple = sin(w.x * 2.2 + w.y * .9 + fbm(q * .8) * 3.) * .5 + .5;
+  float grain = vnoise(q * 40.) * .5 + vnoise(q * 90.) * .5;
+  vec3 c = mix(vec3(.80, .76, .64), vec3(.92, .89, .78), fbm(q * .7));
+  c *= .9 + .12 * ripple;
+  c *= .94 + .1 * grain;
+  // a few dark rocks: soft rounded blobs from low-frequency noise
+  float rock = smoothstep(.74, .8, fbm(q * .45 + vec2(21., 7.)));
+  c = mix(c, vec3(.36, .37, .33) * (.8 + .4 * vnoise(q * 6.)), rock * .85);
+  float pebbles = rock;
+  float weed = smoothstep(.72, .86, fbm(q * .5 + vec2(13., 4.)));
+  c = mix(c, vec3(.32, .36, .22), weed * .55);
+  height = ripple * .35 + pebbles * .6;
+  return c;
+}
+
+// a bed of rounded river pebbles: each its own tone (sage, slate, sand, umber), soft dark gaps
+vec3 pebbleFloor(vec2 q, out float height){
+  vec2 p = q * 3.6, i = floor(p), f = fract(p); float d1 = 9., d2 = 9.; vec2 id = vec2(0);
+  for (int y = -1; y <= 1; y++) for (int x = -1; x <= 1; x++){
+    vec2 g = vec2(x, y), c = g + .2 + .6 * h22(i + g);
+    float d = length((f - c) * vec2(1., 1.15 + .3 * h21(i + g)));
+    if (d < d1){ d2 = d1; d1 = d; id = i + g; } else if (d < d2) d2 = d;
+  }
+  float r = h21(id), r2 = h21(id + 7.);
+  vec3 col = r < .3 ? vec3(.55,.6,.52) : r < .55 ? vec3(.46,.5,.5) : r < .8 ? vec3(.66,.62,.52) : vec3(.48,.4,.32);
+  col = mix(col, vec3(dot(col, vec3(.33))), .35) * (.85 + .3 * r2);
+  float gap = smoothstep(.04, .3, d2 - d1);
+  float dome = sqrt(max(0., 1. - d1 * 1.35));
+  col = mix(vec3(.16, .2, .19), col * (.75 + .35 * dome), gap);
+  col *= .9 + .12 * vnoise(q * 30.);                   // speckle
+  height = dome * gap;
+  return col;
+}
+
 vec3 floorColour(vec2 q, out float height){
+  if (sand > 1.5) return pebbleFloor(q, height);
+  if (sand > .5) return sandFloor(q, height);
   vec4 s = stones(q * 1.0);
   vec4 s2 = stones(q * 2.3 + 11.);                       // smaller gravel between
   float sand = fbm(q * 3.) ;
@@ -98,6 +137,25 @@ float web(vec2 p){
   }
   float e = d2 - d1;
   return exp(-e * e * 90.) * .8 + exp(-e * 9.) * .25;
+}
+// lagoon caustics: curving filaments of bright light, like sun through clear shallow sea.
+// The cell network is warped by smooth noise so edges bend, lines are thin with a soft glow, and
+// their brightness swells and fades along their length as the surface moves.
+float webCrisp(vec2 p){
+  vec2 i = floor(p), f = fract(p); float d1 = 9., d2 = 9.;
+  for (int y = -1; y <= 1; y++) for (int x = -1; x <= 1; x++){
+    vec2 g = vec2(x, y), o2 = h22(i + g); o2 = .5 + .4 * sin(t * .55 + 6.2831 * o2);
+    float d = length(g + o2 - f); if (d < d1){ d2 = d1; d1 = d; } else if (d < d2) d2 = d;
+  }
+  float e = d2 - d1;
+  return exp(-e * e * 420.) * .75 + exp(-e * 10.) * .16;
+}
+vec3 lagoonCaustic(vec2 p, vec2 bend){
+  p += bend * .12;
+  p += (vec2(fbm(p * .3 + t * .04), fbm(p * .3 - t * .035 + 6.)) - .5) * 1.8;
+  float swell = .55 + .7 * vnoise(p * .9 + vec2(t * .2, -t * .16));
+  vec3 c = vec3(webCrisp(p + vec2(.008, 0)), webCrisp(p), webCrisp(p - vec2(.008, 0))) * swell;
+  return c;
 }
 vec3 caustic(vec2 p, vec2 bend){
   p += bend * 3.;
@@ -126,12 +184,14 @@ void main(){
   vec2 g = vec2(hr - hl, hu - hd) * 70.;
   vec2 wq = st * pond / unit * 9.;
   float w1 = fbm(wq + vec2(t * .25, t * .11)), w2 = fbm(wq * 1.7 - vec2(t * .18, -t * .21));
-  g += (vec2(fbm(wq + .05 + vec2(t*.25,t*.11)) - w1, fbm(wq + vec2(.0,.05) + vec2(t*.25,t*.11)) - w1) * 1.1
+  g *= 1.;
+  g += waveAmt * (vec2(fbm(wq + .05 + vec2(t*.25,t*.11)) - w1, fbm(wq + vec2(.0,.05) + vec2(t*.25,t*.11)) - w1) * 1.1
       + vec2(fbm(wq*1.7 + .05 - vec2(t*.18,-t*.21)) - w2, fbm(wq*1.7 + vec2(.0,.05) - vec2(t*.18,-t*.21)) - w2) * .7);
   vec3 n = normalize(vec3(-g * 1.5, 1.));
 
   // depth of water over the floor: deeper in the middle and in a few hollows
   float depth = .55 + .35 * fbm(q * .18 + 2.) + .2 * smoothstep(.2, .9, length((st - .5) * vec2(1.3, 1.)));
+  depth *= sand > .5 ? .55 : 1.;
 
   // refraction: the floor and the fish shift with the surface slope (floor more, it is further down)
   vec2 refrFloor = n.xy * .045 * depth, refrFish = n.xy * .02;
@@ -141,8 +201,10 @@ void main(){
   float fh2; floorColour(q + refrFloor * 6. + vec2(.02, .0), fh2); float fh3; floorColour(q + refrFloor * 6. + vec2(.0, .02), fh3);
   vec3 fn = normalize(vec3((fh - fh2) * 3., (fh - fh3) * 3., 1.));
   fl = lin(fl) * (.45 + .6 * max(0., dot(fn, L))) * .9;
-  vec3 cau = caustic(q * .24, n.xy);
-  fl += cau * lin(vec3(.6, .66, .64)) * .62 * (1. - depth * .5);
+  bool lagoon = sand > .5;
+  vec3 cau = lagoon ? lagoonCaustic(q * (sand > 1.5 ? 1.1 : 1.45), n.xy) : caustic(q * .3, n.xy);
+  fl *= sand > .5 && sand < 1.5 ? .62 + .25 * vnoise(q * .5 + t * .05) : 1.;          // cell interiors sit in shade
+  if (!lagoon) fl += cau * lin(vec3(.6, .66, .64)) * .62 * causticAmt * (1. - depth * .5);
 
   // fish and their shadows, drawn in 2D, seen through the water
   vec4 f = texture(fish, clamp(st + refrFish, vec2(.001), vec2(.999)));
@@ -155,9 +217,11 @@ void main(){
   vec3 absorb = vec3(2.4, .92, .78);
   float isFish = fishNear * step(.12, dot(f.rgb, vec3(.33)));   // shadows (dark) stay on the floor
   float path = mix(depth, .02, isFish);
-  vec3 trans = exp(-absorb * path * 1.7);
+  vec3 trans = exp(-absorb * path * 1.7 * clarity);
   vec3 scatter = lin(mix(waterShallow, waterDeep, clamp(depth * .9, 0., 1.)) * tint);
   vec3 col = under * trans + scatter * (1. - trans) * (1. - isFish * .85);
+  // in clear shallow sea the light web is brighter than anything: add it after the water colour
+  if (lagoon) col += cau * lin(vec3(.78, .96, .92)) * .5 * causticAmt * (1. - isFish * .7) * (1. - depth * .4);
   // sunlight comes through unevenly: broad brighter and darker patches drift slowly
   float dapple = fbm(st * pond / unit * .9 + vec2(t * .015, -t * .01));
   col *= .78 + .5 * smoothstep(.25, .8, dapple);
@@ -196,7 +260,7 @@ void main(){
 
 const hex = (h: string) => { const n = parseInt(h.replace("#", ""), 16); return [((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255]; };
 
-export interface WaterLook { mode: "dither" | "color"; palette: [string, string, string, string]; deep: string; shallow: string; tint?: string; pixel: number; bright?: number }
+export interface WaterLook { mode: "dither" | "color"; palette: [string, string, string, string]; deep: string; shallow: string; tint?: string; pixel: number; bright?: number; floor?: "sand" | "stones" | "pebbles"; caustics?: number; clarity?: number; waves?: number }
 
 const STRENGTH: Record<Ripple["kind"], [number, number]> = { tap: [0.03, 1], drop: [0.014, 0.55], nibble: [0.01, 0.4], wake: [0.012, 0.15] }; // radius (of short side), strength
 
@@ -270,6 +334,8 @@ export function createRealWater(canvas: HTMLCanvasElement) {
       gl.uniform2f(U(compose, "res"), canvas.width, canvas.height); gl.uniform2f(U(compose, "pond"), pondW, pondH); gl.uniform2f(U(compose, "wtexel"), 1 / WW, 1 / WH);
       gl.uniform1f(U(compose, "t"), t); gl.uniform1f(U(compose, "px"), Math.max(1, look.pixel * dpr)); gl.uniform1f(U(compose, "mode"), look.mode === "dither" ? 0 : 1);
       gl.uniform1f(U(compose, "bright"), look.bright ?? 1);
+      gl.uniform1f(U(compose, "sand"), look.floor === "pebbles" ? 2 : look.floor === "sand" ? 1 : 0); gl.uniform1f(U(compose, "causticAmt"), look.caustics ?? 1);
+      gl.uniform1f(U(compose, "clarity"), look.clarity ?? 1); gl.uniform1f(U(compose, "waveAmt"), look.waves ?? 1);
       gl.uniform3fv(U(compose, "waterDeep"), hex(look.deep)); gl.uniform3fv(U(compose, "waterShallow"), hex(look.shallow)); gl.uniform3fv(U(compose, "tint"), hex(look.tint ?? "#ffffff"));
       look.palette.forEach((c, i) => gl.uniform3fv(U(compose, `c${i}`), hex(c)));
       gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);

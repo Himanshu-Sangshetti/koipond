@@ -57,7 +57,7 @@ export interface Fish {
 
 export interface Pellet { x: number; y: number; vx: number; vy: number; age: number; eaten: boolean }
 export interface Ripple { x: number; y: number; age: number; power: number; kind: "tap" | "drop" | "nibble" | "wake" }
-export interface Pad { x: number; y: number; r: number; spin: number; angle: number; vx: number; vy: number; notch: number }
+export interface Pad { x: number; y: number; r: number; spin: number; angle: number; vx: number; vy: number; notch: number; tone: number; flower: boolean }
 export interface Petal { x: number; y: number; r: number; spin: number; angle: number; vx: number; vy: number }
 
 export interface PondOptions {
@@ -77,6 +77,9 @@ export class Pond {
   w: number; h: number; t = 0;
   fish: Fish[] = []; pellets: Pellet[] = []; ripples: Ripple[] = []; pads: Pad[] = []; petals: Petal[] = [];
   current: V = { x: 0, y: 0 };
+  /** 0..1: how hard it is raining. */
+  rain = 0;
+  private lastWake: V = { x: -1e9, y: -1e9 };
   pointer: { x: number; y: number; still: number; speed: number; inside: boolean } = { x: 0, y: 0, still: 0, speed: 0, inside: false };
   keepClear: NonNullable<PondOptions["keepClear"]>;
   private rnd: Random;
@@ -89,7 +92,7 @@ export class Pond {
     this.unit = Math.min(o.width, o.height) * (o.fishSize ?? 0.14);
     this.keepClear = o.keepClear ?? [];
     for (let i = 0; i < (o.fish ?? 9); i++) this.fish.push(this.makeFish(i));
-    for (let i = 0; i < (o.pads ?? 3); i++) this.pads.push(this.makePad());
+    for (let i = 0; i < (o.pads ?? 3); i++) { const pad = this.makePad(); if (i === 0) { pad.flower = true; pad.tone = 0.3; } this.pads.push(pad); }
     for (let i = 0; i < (o.petals ?? 9); i++) { const r = this.rnd; this.petals.push({ x: r.between(0, 1) * this.w, y: r.between(0, 1) * this.h, r: this.unit * r.between(0.06, 0.1), spin: r.between(-0.4, 0.4), angle: r.between(0, TAU), vx: 0, vy: 0 }); }
   }
 
@@ -107,7 +110,9 @@ export class Pond {
     let cover = 0;
     while (cover < variety.spotCover) {
       const ru = r.between(0.06, 0.15), rv = r.between(0.4, 0.95);
-      spots.push({ u: r.between(0.05, 0.85), v: r.between(-0.5, 0.5), ru, rv, color: r.pick(variety.spots) });
+      const u0 = r.between(0.05, 0.85), v0 = r.between(-0.5, 0.5), color = r.pick(variety.spots);
+      spots.push({ u: u0, v: v0, ru, rv, color });
+      for (let k = 0; k < 2; k++) spots.push({ u: u0 + r.between(-ru, ru) * 0.8, v: v0 + r.between(-0.35, 0.35), ru: ru * r.between(0.45, 0.75), rv: rv * r.between(0.5, 0.85), color });
       cover += ru * rv * 1.1;
     }
     return {
@@ -119,7 +124,7 @@ export class Pond {
 
   private makePad(): Pad {
     const r = this.rnd;
-    return { x: r.between(0, 1) * this.w, y: r.between(0, 1) * this.h, r: this.unit * r.between(0.28, 0.5), spin: r.between(-0.03, 0.03), angle: r.between(0, TAU), vx: 0, vy: 0, notch: r.between(0.25, 0.45) };
+    return { x: r.between(0, 1) * this.w, y: r.between(0, 1) * this.h, r: this.unit * r.between(0.42, 0.68), spin: r.between(-0.03, 0.03), angle: r.between(0, TAU), vx: 0, vy: 0, notch: r.between(0.3, 0.5), tone: r.next(), flower: r.next() < 0.45 };
   }
 
   // ------------------------------------------------------------------------------------- events
@@ -144,6 +149,13 @@ export class Pond {
     const p = this.pointer, moved = len(x - p.x, y - p.y);
     p.speed = p.speed * 0.6 + moved * 0.4; p.x = x; p.y = y; p.inside = inside;
     if (moved > 0.5) p.still = 0;
+    // a finger moving through the water drags a wake behind it
+    if (inside && len(x - this.lastWake.x, y - this.lastWake.y) > this.unit * 0.05) {
+      const fresh = this.lastWake.x < -1e8 || len(x - this.lastWake.x, y - this.lastWake.y) > this.unit * 1.5;
+      if (!fresh) this.ripple(x, y, "wake", Math.min(1, p.speed / (this.unit * 0.12)) * 0.9);
+      this.lastWake = { x, y };
+    }
+    if (!inside) this.lastWake = { x: -1e9, y: -1e9 };
   }
 
   /** Ask the fish to hold a shape: a slot for each fish and the direction to swim through it. */
@@ -199,7 +211,7 @@ export class Pond {
 
     // ambient life: an occasional drop on the surface
     this.nextDrop -= dt;
-    if (this.nextDrop < 0) { this.ripple(this.rnd.between(0, this.w), this.rnd.between(0, this.h), "drop", 0.55); this.nextDrop = this.rnd.between(2.5, 6); }
+    while (this.nextDrop < 0) { this.ripple(this.rnd.between(0, this.w), this.rnd.between(0, this.h), "drop", 0.55 + this.rain * 0.3); this.nextDrop += this.rnd.between(2.5, 6) / (1 + this.rain * 40); }
 
     for (const r of this.ripples) r.age += dt;
     this.ripples = this.ripples.filter((r) => r.age < (r.kind === "tap" ? 2.6 : r.kind === "drop" ? 1.6 : 1.0));

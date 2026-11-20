@@ -153,12 +153,13 @@ export const KoiPond = forwardRef<KoiPondHandle, KoiPondProps>(function KoiPond(
 
     const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     let raf = 0, last = performance.now(), acc = 0, visible = true;
-    const io = new IntersectionObserver(([e]) => { visible = e.isIntersecting; if (visible && !raf) { last = performance.now(); raf = requestAnimationFrame(loop); } });
+    const manualMode = !!(window as unknown as { __koiManual?: boolean }).__koiManual;
+    const io = new IntersectionObserver(([e]) => { visible = e.isIntersecting; if (visible && !raf && !manualMode) { last = performance.now(); raf = requestAnimationFrame(loop); } });
     io.observe(canvas);
     const loop = (now: number) => {
       raf = 0;
       if (!pond) return;
-      const dt = Math.min(0.1, (now - last) / 1000); last = now; acc += dt;
+      const dt = Math.max(0, Math.min(0.1, (now - last) / 1000)); last = now; acc += dt;
       if (press && now - press > 550) { pond.feed(pressAt.x, pressAt.y); press = 0; } // long press drops food
       const el = dropRef.current;
       if (el) {
@@ -193,7 +194,7 @@ export const KoiPond = forwardRef<KoiPondHandle, KoiPondProps>(function KoiPond(
     const manual = (window as unknown as { __koiManual?: boolean }).__koiManual;
     if (manual) {
       let simNow = performance.now(); last = simNow;
-      (window as unknown as { __koiFrame?: (dt: number) => void }).__koiFrame = (dt: number) => { simNow += dt * 1000; visible = false; loop(simNow); };
+      (window as unknown as { __koiFrame?: (dt: number) => void }).__koiFrame = (dt: number) => { last = simNow; simNow += dt * 1000; visible = false; loop(simNow); };
     } else raf = requestAnimationFrame(loop);
 
     return () => {

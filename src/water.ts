@@ -377,4 +377,4 @@ export const hex = (h: string) => { const n = parseInt(h.replace("#", ""), 16); 
 
 export interface WaterLook { mode: "dither" | "color" | "ink"; palette: [string, string, string, string]; deep: string; shallow: string; tint?: string; pixel: number; bright?: number; floor?: "sand" | "stones" | "pebbles"; caustics?: number; clarity?: number; waves?: number; film?: boolean; absorb?: [number, number, number] }
 
-export const STRENGTH: Record<Ripple["kind"], [number, number]> = { tap: [0.03, 1.4], drop: [0.012, 0.7], nibble: [0.01, 0.5], wake: [0.012, 0.45] }; // radius (of short side), strength
+export const STRENGTH: Record<Ripple["kind"], [number, number]> = { tap: [0.034, 2.6], drop: [0.012, 0.7], nibble: [0.01, 0.5], wake: [0.012, 0.45] }; // radius (of short side), strength

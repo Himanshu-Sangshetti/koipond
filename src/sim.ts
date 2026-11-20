@@ -173,7 +173,7 @@ export class Pond {
   /** A tap lands: a crown of droplets thrown out, a brief flash, and the ring. */
   splash(x: number, y: number) {
     const u = this.unit;
-    for (let i = 0; i < 14; i++) { const a = (i / 14) * TAU + this.rnd.between(-0.2, 0.2), sp = u * this.rnd.between(0.5, 1.1); this.sparks.push({ x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, age: -this.rnd.between(0, 0.04), life: this.rnd.between(0.32, 0.5), r: u * this.rnd.between(0.014, 0.022), drip: true }); }
+    for (let i = 0; i < 14; i++) { const a = (i / 14) * TAU + this.rnd.between(-0.2, 0.2), sp = u * this.rnd.between(0.5, 1.1); this.sparks.push({ x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, age: -this.rnd.between(0, 0.04), life: this.rnd.between(0.32, 0.5), r: u * this.rnd.between(0.02, 0.03), drip: true }); }
     this.flashes.push({ x, y, age: 0 });
     if (this.sparks.length > 400) this.sparks.splice(0, this.sparks.length - 400);
     this.ripple(x, y, "tap", 1);

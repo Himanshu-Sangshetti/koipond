@@ -61,7 +61,8 @@ export interface Bubble { x: number; y: number; r: number; age: number; life: nu
 export interface Pellet { x: number; y: number; vx: number; vy: number; age: number; eaten: boolean }
 export interface Ripple { x: number; y: number; age: number; power: number; kind: "tap" | "drop" | "nibble" | "wake" }
 export interface Pad { x: number; y: number; r: number; spin: number; angle: number; vx: number; vy: number; notch: number; tone: number; flower: boolean }
-export interface Petal { x: number; y: number; r: number; spin: number; angle: number; vx: number; vy: number }
+export interface Petal { x: number; y: number; r: number; spin: number; angle: number; vx: number; vy: number; z: number }
+export interface Weed { x: number; y: number; len: number; phase: number; dir: number }
 
 export interface PondOptions {
   width: number; height: number; fish?: number; seed?: number;
@@ -80,7 +81,8 @@ const JOINTS = 16, TAIL = 4;
 
 export class Pond {
   w: number; h: number; t = 0;
-  fish: Fish[] = []; bubbles: Bubble[] = []; pellets: Pellet[] = []; ripples: Ripple[] = []; pads: Pad[] = []; petals: Petal[] = [];
+  fish: Fish[] = []; bubbles: Bubble[] = []; pellets: Pellet[] = []; ripples: Ripple[] = []; pads: Pad[] = []; petals: Petal[] = []; weeds: Weed[] = [];
+  private petalMax = 0; private nextPetal = 0;
   current: V = { x: 0, y: 0 };
   /** 0..1: how hard it is raining. */
   rain = 0;
@@ -106,12 +108,16 @@ export class Pond {
       this.fish.push(m);
     }
     for (let i = 0; i < (o.pads ?? 3); i++) { const pad = this.makePad(); if (i === 0) { pad.flower = true; pad.tone = 0.3; } this.pads.push(pad); }
-    for (let i = 0; i < (o.petals ?? 9); i++) { const r = this.rnd; this.petals.push({ x: r.between(0, 1) * this.w, y: r.between(0, 1) * this.h, r: this.unit * r.between(0.06, 0.1), spin: r.between(-0.4, 0.4), angle: r.between(0, TAU), vx: 0, vy: 0 }); }
+    this.petalMax = o.petals ?? 9;
+    for (let i = 0; i < this.petalMax; i++) this.petals.push(this.makePetal(0));
+    // water plants rooted on the floor, in loose clumps
+    for (let c = 0; c < 4; c++) { const cx = this.rnd.between(0.05, 0.95) * this.w, cy = this.rnd.between(0.05, 0.95) * this.h;
+      for (let k = 0; k < 9; k++) this.weeds.push({ x: cx + this.rnd.between(-1, 1) * this.unit * 0.25, y: cy + this.rnd.between(-1, 1) * this.unit * 0.25, len: this.unit * this.rnd.between(0.5, 1.1), phase: this.rnd.between(0, TAU), dir: this.rnd.between(0, TAU) }); }
   }
 
   private makeFish(id: number): Fish {
     const r = this.rnd, variety = VARIETIES[id % VARIETIES.length];
-    const length = this.unit * r.between(0.78, 1.25), girth = length * r.between(0.135, 0.16);
+    const length = this.unit * r.between(0.78, 1.25), girth = length * r.between(0.1, 0.12);
     const x = r.between(0.1, 0.9) * this.w, y = r.between(0.12, 0.88) * this.h, heading = r.between(-Math.PI, Math.PI);
     const joints: V[] = [], seg = length / (JOINTS - 1);
     for (let i = 0; i < JOINTS; i++) joints.push({ x: x - Math.cos(heading) * seg * i, y: y - Math.sin(heading) * seg * i });
@@ -133,6 +139,11 @@ export class Pond {
       x, y, heading, speed: 0, turn: 0, activity: "drift", activityLeft: r.between(0.5, 3), goalHeading: heading, goalSpeed: 0, target: null,
       effort: 0.3, beat: r.between(0, TAU), depth: r.between(0.1, 0.6), depthGoal: 0.3, joints, tail, tailVel, finPhase: r.between(0, TAU), lastGulp: -99,
     };
+  }
+
+  private makePetal(z: number): Petal {
+    const r = this.rnd;
+    return { x: r.between(0, 1) * this.w, y: r.between(0, 1) * this.h, r: this.unit * r.between(0.055, 0.085), spin: r.between(-0.6, 0.6), angle: r.between(0, TAU), vx: 0, vy: 0, z };
   }
 
   private makePad(): Pad {
@@ -240,16 +251,29 @@ export class Pond {
     this.pellets = this.pellets.filter((p) => !p.eaten && p.age < 40);
 
     for (const p of this.pads) {
-      p.vx += (this.current.x * u * 0.25 - p.vx) * dt * 0.6; p.vy += (this.current.y * u * 0.25 - p.vy) * dt * 0.6;
+      p.vx += (this.current.x * u * 0.9 - p.vx) * dt * 1.2; p.vy += (this.current.y * u * 0.9 - p.vy) * dt * 1.2;
       p.vx *= Math.exp(-dt * 0.8); p.vy *= Math.exp(-dt * 0.8);
       p.x += p.vx * dt + Math.sin(this.t * 0.1 + p.angle) * u * 0.02 * dt; p.y += p.vy * dt + Math.cos(this.t * 0.08 + p.angle) * u * 0.02 * dt;
       p.angle += p.spin * dt;
       const m = p.r; if (p.x < -m) p.x = this.w + m; if (p.x > this.w + m) p.x = -m; if (p.y < -m) p.y = this.h + m; if (p.y > this.h + m) p.y = -m;
     }
 
+    // sakura: every so often a petal drifts down from above and settles on the water
+    this.nextPetal -= dt;
+    if (this.petalMax > 0 && this.nextPetal < 0) {
+      this.petals.push(this.makePetal(1)); this.nextPetal = this.rnd.between(0.7, 1.8);
+      const floating = this.petals.filter((q) => q.z <= 0);
+      if (floating.length > this.petalMax * 2) this.petals.splice(this.petals.indexOf(floating[0]), 1);
+    }
     for (const p of this.petals) {
-      p.vx += (this.current.x * u * 0.4 + Math.sin(this.t * 0.13 + p.angle) * u * 0.03 - p.vx) * dt * 0.5;
-      p.vy += (this.current.y * u * 0.4 + Math.cos(this.t * 0.11 + p.r) * u * 0.03 - p.vy) * dt * 0.5;
+      if (p.z > 0) {
+        p.z -= dt * 0.28; p.angle += dt * 2.2 * Math.sign(p.spin || 1);
+        p.x += Math.sin(this.t * 1.7 + p.r * 50) * u * 0.25 * dt + u * 0.12 * dt; p.y += u * 0.08 * dt;
+        if (p.z <= 0) { p.z = 0; this.ripple(p.x, p.y, "nibble", 0.3); }
+        continue;
+      }
+      p.vx += (this.current.x * u * 1.4 + Math.sin(this.t * 0.13 + p.angle) * u * 0.03 - p.vx) * dt * 0.5;
+      p.vy += (this.current.y * u * 1.4 + Math.cos(this.t * 0.11 + p.r) * u * 0.03 - p.vy) * dt * 0.5;
       p.x += p.vx * dt; p.y += p.vy * dt; p.angle += p.spin * dt; p.spin *= Math.exp(-dt * 0.6);
       const m = p.r * 2; if (p.x < -m) p.x = this.w + m; if (p.x > this.w + m) p.x = -m; if (p.y < -m) p.y = this.h + m; if (p.y > this.h + m) p.y = -m;
     }
@@ -305,8 +329,8 @@ export class Pond {
       if (!slot) for (const z of this.keepClear) {
         if (lx > z.x && lx < z.x + z.w && ly > z.y && ly < z.y + z.h) { const cx = z.x + z.w / 2, cy = z.y + z.h / 2, dx = f.x - cx, dy = (f.y - cy) * (z.w / Math.max(1, z.h)), d = len(dx, dy) || 1; ax += dx / d * 1.4; ay += dy / d * 1.4; }
       }
-      gx += ax + this.current.x * 1.6; gy += ay + this.current.y * 1.6;
-      want += len(this.current.x, this.current.y) * u * 0.9;
+      gx += ax + this.current.x * 2.6; gy += ay + this.current.y * 2.6;
+      want += len(this.current.x, this.current.y) * u * 1.6;
       f.goalSpeed = want;
 
       // ----- heavy body: turning is limited, faster when moving, sharper in a dart

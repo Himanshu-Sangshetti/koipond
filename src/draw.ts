@@ -96,6 +96,20 @@ export function drawUnder(ctx: CanvasRenderingContext2D, pond: Pond, shadow = 0.
   const frames = new Map(fishes.map((f) => [f, frame(pond, f)]));
   const unit = Math.min(pond.w, pond.h) * 0.11;
 
+  // water plants on the floor: soft tapered blades, blurred by the water above them, swaying
+  ctx.save(); ctx.filter = `blur(${Math.max(1, unit * 0.025 * sx)}px)`;
+  for (const w of pond.weeds) {
+    const sway = Math.sin(pond.t * 0.6 + w.phase) * 0.3 + pond.current.x * 0.5, a = w.dir + sway, n = { x: -Math.sin(w.dir), y: Math.cos(w.dir) };
+    const mx = w.x + Math.cos(w.dir + sway * 0.4) * w.len * 0.5, my = w.y + Math.sin(w.dir + sway * 0.4) * w.len * 0.5;
+    const ex = w.x + Math.cos(a) * w.len, ey = w.y + Math.sin(a) * w.len, wd = w.len * 0.09;
+    ctx.fillStyle = w.phase > 3 ? "rgba(52,82,46,0.5)" : "rgba(72,98,52,0.42)";
+    ctx.beginPath(); ctx.moveTo(w.x + n.x * wd, w.y + n.y * wd);
+    ctx.quadraticCurveTo(mx + n.x * wd * 1.4, my + n.y * wd * 1.4, ex, ey);
+    ctx.quadraticCurveTo(mx - n.x * wd * 1.4, my - n.y * wd * 1.4, w.x - n.x * wd, w.y - n.y * wd);
+    ctx.closePath(); ctx.fill();
+  }
+  ctx.restore();
+
   // shadows: fish near the surface throw softer shadows further away; pads shade the floor too
   ctx.save();
   if (fish) for (const f of fishes) {
@@ -107,7 +121,7 @@ export function drawUnder(ctx: CanvasRenderingContext2D, pond: Pond, shadow = 0.
   ctx.filter = `blur(${Math.max(1, unit * 0.12 * sx)}px)`; ctx.fillStyle = `rgba(0,0,0,${shadow * 0.75})`;
   for (const p of pond.pads) { padPath(ctx, p.x + p.r * 0.35, p.y + p.r * 0.5, p.r, p.angle, p.notch); ctx.fill(); }
   ctx.fillStyle = `rgba(0,0,0,${shadow * 0.5})`;
-  for (const p of pond.petals) { petalPath(ctx, p.x + unit * 0.06, p.y + unit * 0.09, p.r * 1.6, p.angle); ctx.fill(); }
+  for (const p of pond.petals) { const o = unit * (0.06 + p.z * 0.8); petalPath(ctx, p.x + o, p.y + o * 1.4, p.r * (1 + p.z * 0.6), p.angle); ctx.fill(); }
   ctx.restore();
   if (!fish) return;
 
@@ -165,15 +179,19 @@ export function drawTop(ctx: CanvasRenderingContext2D, pond: Pond) {
     ctx.fillStyle = grd; ctx.beginPath(); ctx.arc(p.x, p.y, r, 0, TAU); ctx.fill();
   }
   for (const p of pond.petals) {
-    // a fallen leaf: warm, with a darker midrib
-    const tone = ["#b8743a", "#c99a45", "#8f5a34", "#a8803c"][Math.floor((p.r * 997) % 4)];
-    const L = p.r * 1.8, c = Math.cos(p.angle), s2 = Math.sin(p.angle);
-    ctx.fillStyle = tone; ctx.beginPath();
-    ctx.moveTo(p.x - c * L, p.y - s2 * L);
-    ctx.quadraticCurveTo(p.x - s2 * L * 0.55, p.y + c * L * 0.55, p.x + c * L, p.y + s2 * L);
-    ctx.quadraticCurveTo(p.x + s2 * L * 0.55, p.y - c * L * 0.55, p.x - c * L, p.y - s2 * L); ctx.fill();
-    ctx.strokeStyle = "rgba(60,30,10,0.45)"; ctx.lineWidth = Math.max(0.5, p.r * 0.08);
-    ctx.beginPath(); ctx.moveTo(p.x - c * L * 1.15, p.y - s2 * L * 1.15); ctx.lineTo(p.x + c * L * 0.9, p.y + s2 * L * 0.9); ctx.stroke();
+    // a sakura petal: pale pink, deeper at the base; larger and softer while still falling
+    const r = p.r * (1 + p.z * 0.6), cx = Math.cos(p.angle), cy = Math.sin(p.angle);
+    const grd = ctx.createLinearGradient(p.x - cx * r, p.y - cy * r, p.x + cx * r, p.y + cy * r);
+    grd.addColorStop(0, "#e7a3b3"); grd.addColorStop(1, "#fcecef");
+    ctx.globalAlpha = p.z > 0 ? 0.92 : 1; ctx.fillStyle = grd; petalPath(ctx, p.x, p.y, r, p.angle); ctx.fill(); ctx.globalAlpha = 1;
+  }
+  // rain: faint streaks of falling drops
+  if (pond.rain > 0) {
+    ctx.strokeStyle = "rgba(235,245,240,0.22)"; ctx.lineWidth = Math.max(0.6, unit * 0.008);
+    const n = Math.round(pond.rain * 40);
+    ctx.beginPath();
+    for (let i = 0; i < n; i++) { const x = Math.random() * pond.w, y = Math.random() * pond.h, l = unit * (0.08 + Math.random() * 0.12); ctx.moveTo(x, y); ctx.lineTo(x + l * 0.25, y + l); }
+    ctx.stroke();
   }
   for (const b of pond.bubbles) {
     if (b.age < 0) continue;

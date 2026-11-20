@@ -213,12 +213,13 @@ void main(){
   // fish and their shadows, drawn in 2D, seen through the water
   vec4 f = texture(fish, clamp(st + refrFish, vec2(.001), vec2(.999)));
   vec3 frgb = lin(f.rgb);
+  float shadowA = 0.;
   if (useGL > .5){
     // floor shadows of the GPU-drawn koi: their own silhouettes, offset by the sun and softened
     vec2 so = vec2(.012, .02) * vec2(pond.y / pond.x, 1.);
     float sa = 0.;
     for (int k = 0; k < 8; k++){ float a = float(k) * .785; sa += texture(fishgl, clamp(st + refrFloor * .4 - so + vec2(cos(a), sin(a)) * .006, vec2(.001), vec2(.999))).a; }
-    sa /= 8.;
+    sa /= 8.; shadowA = sa;
     // pad and petal shadows come from the 2D layer (dark, with alpha)
     vec3 floorLit = mix(fl, frgb, f.a) * (1. - sa * .6);
     vec4 g2 = texture(fishgl, clamp(st + refrFish, vec2(.001), vec2(.999)));
@@ -258,6 +259,55 @@ void main(){
   col *= 1. - .35 * pow(length((st - .5) * vec2(1.1, 1.)), 2.2);
   col *= bright;
 
+
+  // ---------------------------------------------------------------- INK: a woodblock-print pond
+  if (mode > 1.5){
+    vec3 INK = vec3(.11, .12, .2), DEEP = vec3(.16, .22, .33), MID = vec3(.27, .38, .44), SAGE = vec3(.5, .6, .55), CREAM = vec3(.93, .89, .8);
+    // bokashi: deep indigo in the middle of the pond, lighter toward the banks, in a few soft steps
+    float bank = smoothstep(.1, .9, length((st - .5) * vec2(1.25, 1.)));
+    float stepB = floor((bank + fbm(st * 3. + 2.) * .25) * 4.) / 4.;
+    vec3 wc = mix(DEEP, mix(MID, SAGE, .55), stepB);
+    // the floor shows as faint printed stones
+    float fhI; floorColour(q, fhI);
+    wc = mix(wc, wc * 1.08, step(.45, fhI));
+    // light on the floor as cream print lines; ripples as printed rings
+    float web2 = lagoonCaustic(q * .9, n.xy).g;
+    wc = mix(wc, mix(wc, CREAM, .32), smoothstep(.62, .82, web2) * (1. - bank * .4));
+    vec2 gw = vec2(hr - hl, hu - hd) * 70.;
+    float ring = smoothstep(.35, .55, length(gw)) * (1. - smoothstep(.55, 1.1, length(gw)) * .5);
+    wc = mix(wc, CREAM, ring * .75);
+    // shadows of koi and pads: flat indigo
+    vec4 sh = texture(fish, clamp(st, vec2(.001), vec2(.999)));
+    wc = mix(wc, INK, max(shadowA * .55, (1. - step(.12, dot(sh.rgb, vec3(.33)))) * sh.a * .45));
+    // koi: their colours in three flat tone bands, with an ink outline
+    vec2 px2 = 1.6 / res;
+    vec4 fk = texture(fishgl, clamp(st + refrFish, vec2(.001), vec2(.999)));
+    vec3 fc = fishPremul > .5 ? fk.rgb / max(fk.a, .001) : fk.rgb;
+    float fl0 = dot(fc, vec3(.299, .587, .114));
+    // snap to the print palette (cream, vermilion, orange, gold, ink), then shade in two flat bands
+    vec3 P[5] = vec3[5](CREAM, vec3(.84, .25, .12), vec3(.92, .47, .16), vec3(.9, .66, .24), INK);
+    float best = 9.; vec3 fq = CREAM;
+    vec3 fn2 = fc / max(fl0, .05) * .6;
+    for (int k = 0; k < 5; k++){ float d = distance(fn2, P[k] / max(dot(P[k], vec3(.299, .587, .114)), .05) * .6) + abs(fl0 - dot(P[k], vec3(.299, .587, .114))) * .8; if (d < best){ best = d; fq = P[k]; } }
+    fq *= fl0 < dot(fq, vec3(.299, .587, .114)) * .72 ? .8 : 1.;
+    float aN = 0., aX = 1.;
+    for (int k = 0; k < 4; k++){ vec2 o = vec2(k == 0 ? 1. : k == 1 ? -1. : 0., k == 2 ? 1. : k == 3 ? -1. : 0.) * px2; float a2 = texture(fishgl, clamp(st + refrFish + o, vec2(.001), vec2(.999))).a; aN = max(aN, a2); aX = min(aX, a2); }
+    vec3 ic = mix(wc, fq, step(.5, fk.a));
+    ic = mix(ic, INK, smoothstep(.3, .6, aN - aX));
+    // floating things: pads and petals posterised, outlined
+    float tN = 0., tX = 1.;
+    for (int k = 0; k < 4; k++){ vec2 o = vec2(k == 0 ? 1. : k == 1 ? -1. : 0., k == 2 ? 1. : k == 3 ? -1. : 0.) * px2; float a2 = texture(top, st + o).a; tN = max(tN, a2); tX = min(tX, a2); }
+    vec3 tc = tp.rgb; float tl = dot(tc, vec3(.299, .587, .114));
+    tc = tc * (tl < .3 ? .8 : tl < .6 ? 1. : 1.08);
+    ic = mix(ic, tc, step(.5, tp.a));
+    ic = mix(ic, INK, smoothstep(.3, .6, tN - tX));
+    // paper: fine grain and fibres
+    float grain = vnoise(gl_FragCoord.xy * .9) * .5 + vnoise(gl_FragCoord.xy * .15 + 7.) * .5;
+    ic *= .92 + .09 * grain;
+    ic = mix(ic, ic * vec3(1.02, 1., .95), .5);
+    o = vec4(ic, 1);
+    return;
+  }
   if (mode < .5){
     col = mix(srgb(col), tp.rgb, tp.a);
     float l = pow(clamp(dot(col, vec3(.299, .587, .114)) * 1.05, 0., 1.), 1.1);
@@ -283,7 +333,7 @@ void main(){
 
 const hex = (h: string) => { const n = parseInt(h.replace("#", ""), 16); return [((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255]; };
 
-export interface WaterLook { mode: "dither" | "color"; palette: [string, string, string, string]; deep: string; shallow: string; tint?: string; pixel: number; bright?: number; floor?: "sand" | "stones" | "pebbles"; caustics?: number; clarity?: number; waves?: number; film?: boolean; absorb?: [number, number, number] }
+export interface WaterLook { mode: "dither" | "color" | "ink"; palette: [string, string, string, string]; deep: string; shallow: string; tint?: string; pixel: number; bright?: number; floor?: "sand" | "stones" | "pebbles"; caustics?: number; clarity?: number; waves?: number; film?: boolean; absorb?: [number, number, number] }
 
 const STRENGTH: Record<Ripple["kind"], [number, number]> = { tap: [0.03, 1], drop: [0.014, 0.55], nibble: [0.01, 0.4], wake: [0.018, 0.42] }; // radius (of short side), strength
 
@@ -363,7 +413,7 @@ export function createRealWater(canvas: HTMLCanvasElement) {
       gl.uniform1i(U(compose, "fishgl"), 3); gl.uniform1f(U(compose, "useGL"), pond || fish3d ? 1 : 0); gl.uniform1f(U(compose, "fishPremul"), fish3d ? 0 : 1);
       gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D, topTex); gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, top); gl.uniform1i(U(compose, "top"), 2);
       gl.uniform2f(U(compose, "res"), canvas.width, canvas.height); gl.uniform2f(U(compose, "pond"), pondW, pondH); gl.uniform2f(U(compose, "wtexel"), 1 / WW, 1 / WH);
-      gl.uniform1f(U(compose, "t"), t); gl.uniform1f(U(compose, "px"), Math.max(1, look.pixel * dpr)); gl.uniform1f(U(compose, "mode"), look.mode === "dither" ? 0 : 1);
+      gl.uniform1f(U(compose, "t"), t); gl.uniform1f(U(compose, "px"), Math.max(1, look.pixel * dpr)); gl.uniform1f(U(compose, "mode"), look.mode === "dither" ? 0 : look.mode === "ink" ? 2 : 1);
       gl.uniform1f(U(compose, "bright"), look.bright ?? 1);
       gl.uniform1f(U(compose, "sand"), look.floor === "pebbles" ? 2 : look.floor === "sand" ? 1 : 0); gl.uniform1f(U(compose, "causticAmt"), look.caustics ?? 1);
       gl.uniform1f(U(compose, "clarity"), look.clarity ?? 1); gl.uniform1f(U(compose, "film"), look.film ? 1 : 0);

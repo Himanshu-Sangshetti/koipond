@@ -47,7 +47,7 @@ const COMPOSE = `#version 300 es
 precision highp float;
 in vec2 uv; out vec4 o;
 uniform sampler2D waves, fish, top, fishgl;
-uniform float useGL;
+uniform float useGL, fishPremul;
 uniform vec2 res, pond, wtexel;
 uniform float t, px, mode, bright, sand, causticAmt, clarity, waveAmt;
 uniform vec3 waterDeep, waterShallow, tint, c0, c1, c2, c3;
@@ -204,7 +204,7 @@ void main(){
   vec3 fn = normalize(vec3((fh - fh2) * 3., (fh - fh3) * 3., 1.));
   fl = lin(fl) * (.45 + .6 * max(0., dot(fn, L))) * .9;
   bool lagoon = sand > .5 && sand < 1.5;
-  vec3 cau = sand > .5 ? lagoonCaustic(q * (lagoon ? 1.45 : .9), n.xy) : caustic(q * .3, n.xy);
+  vec3 cau = lagoonCaustic(q * (lagoon ? 1.45 : .9), n.xy);
   fl *= sand > .5 && sand < 1.5 ? .62 + .25 * vnoise(q * .5 + t * .05) : 1.;          // cell interiors sit in shade
   if (!lagoon) fl += cau * lin(vec3(.6, .66, .64)) * .62 * causticAmt * (1. - depth * .5);
 
@@ -220,7 +220,7 @@ void main(){
     // pad and petal shadows come from the 2D layer (dark, with alpha)
     vec3 floorLit = mix(fl, frgb, f.a) * (1. - sa * .6);
     vec4 g2 = texture(fishgl, clamp(st + refrFish, vec2(.001), vec2(.999)));
-    vec3 fishCol = lin(g2.rgb / max(g2.a, .001));
+    vec3 fishCol = lin(fishPremul > .5 ? g2.rgb / max(g2.a, .001) : g2.rgb);
     fl = floorLit; f = vec4(fishCol, g2.a); frgb = fishCol;
   }
   // the fish layer's alpha is how close to the surface it is; shadows are dark with low alpha
@@ -276,7 +276,7 @@ const hex = (h: string) => { const n = parseInt(h.replace("#", ""), 16); return 
 
 export interface WaterLook { mode: "dither" | "color"; palette: [string, string, string, string]; deep: string; shallow: string; tint?: string; pixel: number; bright?: number; floor?: "sand" | "stones" | "pebbles"; caustics?: number; clarity?: number; waves?: number }
 
-const STRENGTH: Record<Ripple["kind"], [number, number]> = { tap: [0.03, 1], drop: [0.014, 0.55], nibble: [0.01, 0.4], wake: [0.012, 0.15] }; // radius (of short side), strength
+const STRENGTH: Record<Ripple["kind"], [number, number]> = { tap: [0.03, 1], drop: [0.014, 0.55], nibble: [0.01, 0.4], wake: [0.018, 0.42] }; // radius (of short side), strength
 
 export function createRealWater(canvas: HTMLCanvasElement) {
   const gl = canvas.getContext("webgl2", { antialias: false, premultipliedAlpha: false, preserveDrawingBuffer: true });
@@ -313,20 +313,20 @@ export function createRealWater(canvas: HTMLCanvasElement) {
     fbos = states.map((s) => { const f = gl.createFramebuffer()!; gl.bindFramebuffer(gl.FRAMEBUFFER, f); gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, s, 0); gl.clearColor(0, 0, 0, 1); gl.clear(gl.COLOR_BUFFER_BIT); return f; });
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
   };
-  const fishTex = tex(1, 1, false), topTex = tex(1, 1, false);
+  const fishTex = tex(1, 1, false), topTex = tex(1, 1, false), fish3dTex = tex(1, 1, false);
   const injected = new WeakSet<Ripple>();
   const drops = new Float32Array(64);
   const U = (p: WebGLProgram, n: string) => gl.getUniformLocation(p, n);
 
   return {
-    render(fish: HTMLCanvasElement, top: HTMLCanvasElement, pondW: number, pondH: number, ripples: Ripple[], t: number, look: WaterLook, dpr: number, steps = 2, pond?: Pond) {
-      if (pond) fishR.render(pond, canvas.width, canvas.height);
+    render(fish: HTMLCanvasElement, top: HTMLCanvasElement, pondW: number, pondH: number, ripples: Ripple[], t: number, look: WaterLook, dpr: number, steps = 2, pond?: Pond, fish3d?: HTMLCanvasElement) {
+      if (pond && !fish3d) fishR.render(pond, canvas.width, canvas.height);
       sizeWaves(pondW / pondH);
       // new disturbances become drops in the height field
       let n = 0;
       const short = Math.min(pondW, pondH);
       for (const r of ripples) {
-        if (injected.has(r) || r.age < 0 || n >= 16) continue;
+        if (injected.has(r) || r.age < 0 || n >= 16) continue; // (up to 16 new disturbances per frame)
         injected.add(r);
         const [rad, str] = STRENGTH[r.kind];
         drops.set([r.x / pondW, r.y / pondH, (rad * short) / pondW, str * r.power * 0.05], n * 4); n++;
@@ -348,7 +348,10 @@ export function createRealWater(canvas: HTMLCanvasElement) {
       gl.useProgram(compose); gl.viewport(0, 0, canvas.width, canvas.height);
       gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, states[cur]); gl.uniform1i(U(compose, "waves"), 0);
       gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, fishTex); gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, fish); gl.uniform1i(U(compose, "fish"), 1);
-      gl.activeTexture(gl.TEXTURE3); gl.bindTexture(gl.TEXTURE_2D, fishR.texture); gl.uniform1i(U(compose, "fishgl"), 3); gl.uniform1f(U(compose, "useGL"), pond ? 1 : 0);
+      gl.activeTexture(gl.TEXTURE3);
+      if (fish3d) { gl.bindTexture(gl.TEXTURE_2D, fish3dTex); gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, fish3d); }
+      else gl.bindTexture(gl.TEXTURE_2D, fishR.texture);
+      gl.uniform1i(U(compose, "fishgl"), 3); gl.uniform1f(U(compose, "useGL"), pond || fish3d ? 1 : 0); gl.uniform1f(U(compose, "fishPremul"), fish3d ? 0 : 1);
       gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D, topTex); gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, top); gl.uniform1i(U(compose, "top"), 2);
       gl.uniform2f(U(compose, "res"), canvas.width, canvas.height); gl.uniform2f(U(compose, "pond"), pondW, pondH); gl.uniform2f(U(compose, "wtexel"), 1 / WW, 1 / WH);
       gl.uniform1f(U(compose, "t"), t); gl.uniform1f(U(compose, "px"), Math.max(1, look.pixel * dpr)); gl.uniform1f(U(compose, "mode"), look.mode === "dither" ? 0 : 1);

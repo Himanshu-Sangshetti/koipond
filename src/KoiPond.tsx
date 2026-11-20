@@ -10,6 +10,7 @@ import { forwardRef, useEffect, useImperativeHandle, useRef } from "react";
 import { drawScene, drawTop, drawUnder } from "./draw";
 import { createWater, type Look } from "./gl";
 import { createRealWater } from "./water";
+import { createFish3D } from "./fish3d";
 import { Pond, type V } from "./sim";
 
 export const LOOKS: Record<string, Look> = {
@@ -18,7 +19,7 @@ export const LOOKS: Record<string, Look> = {
   violet: { mode: "dither", palette: ["#09080f", "#2a2160", "#6c5ce7", "#e4dfff"], deep: "#05040a", shallow: "#15122a", pixel: 2 },
   ink: { mode: "dither", palette: ["#0c0c0c", "#3a3a3a", "#9a9a9a", "#f2f0ea"], deep: "#050505", shallow: "#1b1b1b", pixel: 2 },
   ember: { mode: "dither", palette: ["#0d0806", "#5a1f12", "#e2451c", "#fde6c8"], deep: "#070403", shallow: "#1c0f0a", pixel: 2 },
-  natural: { mode: "color", palette: ["#000", "#000", "#000", "#000"], deep: "#062a3c", shallow: "#14525a", tint: "#f2fbff", pixel: 1 },
+  natural: { mode: "color", palette: ["#000", "#000", "#000", "#000"], deep: "#062a3c", shallow: "#14525a", tint: "#f2fbff", pixel: 1, caustics: .4, waves: .8 },
 };
 
 export interface KoiPondHandle {
@@ -38,6 +39,7 @@ export interface KoiPondProps {
   fishSize?: number;
   pads?: number;
   petals?: number;
+  minnows?: number;
   seed?: number;
   interactive?: boolean;
   /** 0..1 rain on the surface. */
@@ -53,7 +55,7 @@ export interface KoiPondProps {
 }
 
 export const KoiPond = forwardRef<KoiPondHandle, KoiPondProps>(function KoiPond(
-  { fish = 9, look = "violet", fishSize = 0.14, pads = 3, petals = 9, seed = 7, interactive = true, scale = 1, rain = 0, water, cursor = true, className, style }, ref,
+  { fish = 9, look = "violet", fishSize = 0.14, pads = 3, petals = 9, minnows = 0, seed = 7, interactive = true, scale = 1, rain = 0, water, cursor = true, className, style }, ref,
 ) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const pondRef = useRef<Pond | null>(null);
@@ -65,6 +67,7 @@ export const KoiPond = forwardRef<KoiPondHandle, KoiPondProps>(function KoiPond(
   if (pondRef.current) pondRef.current.rain = rain;
   const rainRef = useRef(rain); rainRef.current = rain;
   const dropRef = useRef<HTMLDivElement>(null);
+  const dotRef = useRef<HTMLDivElement>(null);
 
   useImperativeHandle(ref, () => ({
     feed: (x, y) => pondRef.current?.feed(x * sizeRef.current.w, y * sizeRef.current.h),
@@ -83,6 +86,9 @@ export const KoiPond = forwardRef<KoiPondHandle, KoiPondProps>(function KoiPond(
     const water = real ? null : createWater(canvas);
     if (!real && !water) return;
     const topLayer = document.createElement("canvas"), tctx = topLayer.getContext("2d")!;
+    let fish3d: ReturnType<typeof createFish3D> | null = null;
+    if (real) { try { fish3d = createFish3D(); } catch (e) { console.warn("koipond: 3D koi unavailable", e); } }
+    if (fish3d && location.search.includes("pondraw")) (window as unknown as { __koi3d?: HTMLCanvasElement }).__koi3d = fish3d.canvas;
     const scene = document.createElement("canvas"), sctx = scene.getContext("2d")!;
     const dpr = Math.min(2, window.devicePixelRatio || 1);
     let pond: Pond | null = null;
@@ -91,7 +97,7 @@ export const KoiPond = forwardRef<KoiPondHandle, KoiPondProps>(function KoiPond(
       const r = canvas.getBoundingClientRect(), w = Math.max(1, Math.round(r.width * scale)), h = Math.max(1, Math.round(r.height * scale));
       canvas.width = Math.round(r.width * dpr); canvas.height = Math.round(r.height * dpr);
       scene.width = w; scene.height = h; topLayer.width = canvas.width; topLayer.height = canvas.height;
-      if (!pond) { pond = new Pond({ width: w, height: h, fish, fishSize, pads, petals, seed }); pond.rain = rainRef.current; pondRef.current = pond; }
+      if (!pond) { pond = new Pond({ width: w, height: h, fish, fishSize, pads, petals, minnows, seed }); pond.rain = rainRef.current; pondRef.current = pond; }
       else if (w !== pond.w || h !== pond.h) pond.resize(w, h);
       sizeRef.current = { w, h };
     };
@@ -126,14 +132,15 @@ export const KoiPond = forwardRef<KoiPondHandle, KoiPondProps>(function KoiPond(
       if (press && now - press > 550) { pond.feed(pressAt.x, pressAt.y); press = 0; } // long press drops food
       const el = dropRef.current;
       if (el) {
-        const k = 1 - Math.exp(-dt * 22); const nx = drop.x + (drop.tx - drop.x) * k, ny = drop.y + (drop.ty - drop.y) * k;
-        drop.vx = drop.vx * 0.8 + ((nx - drop.x) / Math.max(dt, 1e-3)) * 0.2; drop.vy = drop.vy * 0.8 + ((ny - drop.y) / Math.max(dt, 1e-3)) * 0.2; drop.x = nx; drop.y = ny;
-        const sp = Math.hypot(drop.vx, drop.vy), stretch = Math.min(1.9, 1 + sp / 900), ang = Math.atan2(drop.vy, drop.vx);
+        // a ring that trails the pointer and lies flat on the water, with a small dot at the exact point
+        drop.x += (drop.tx - drop.x) * 0.16; drop.y += (drop.ty - drop.y) * 0.16;
         el.style.opacity = drop.shown ? "1" : "0";
-        el.style.transform = `translate(${drop.x}px, ${drop.y}px) translate(-50%, -50%) rotate(${ang}rad) scale(${stretch * (drop.down ? 0.7 : 1)}, ${(1 / Math.sqrt(stretch)) * (drop.down ? 0.7 : 1)})`;
+        const sc = drop.down ? 1.35 : 1;
+        el.style.transform = `translate(${drop.x}px, ${drop.y}px) translate(-50%, -50%) scale(${sc})`;
+        if (dotRef.current) { dotRef.current.style.opacity = drop.shown ? "1" : "0"; dotRef.current.style.transform = `translate(${drop.tx}px, ${drop.ty}px) translate(-50%, -50%)`; }
       }
       while (acc >= 1 / 60) { pond.step(1 / 60); acc -= 1 / 60; }
-      if (real) { drawUnder(sctx, pond, 0.8, false); drawTop(tctx, pond); real.render(scene, topLayer, pond.w, pond.h, pond.ripples, pond.t, themeRef.current, dpr, 2, pond); }
+      if (real) { drawUnder(sctx, pond, 0.8, false); drawTop(tctx, pond); fish3d?.render(pond, canvas.width, canvas.height); real.render(scene, topLayer, pond.w, pond.h, pond.ripples, pond.t, themeRef.current, dpr, 2, pond, fish3d?.canvas); }
       else { drawScene(sctx, pond); water!.render(scene, pond.w, pond.h, pond.ripples, pond.t, themeRef.current, dpr); }
       if (visible && !reduced) raf = requestAnimationFrame(loop);
     };
@@ -143,17 +150,18 @@ export const KoiPond = forwardRef<KoiPondHandle, KoiPondProps>(function KoiPond(
     return () => {
       cancelAnimationFrame(raf); ro.disconnect(); io.disconnect();
       canvas.removeEventListener("pointermove", onMove); canvas.removeEventListener("pointerdown", onDown); window.removeEventListener("pointerup", onUp);
-      pondRef.current = null;
+      pondRef.current = null; fish3d?.dispose();
     };
-  }, [fish, fishSize, pads, petals, seed, interactive, scale]);
+  }, [fish, fishSize, pads, petals, minnows, seed, interactive, scale]);
 
   return (
     <div className={className} style={{ position: "relative", overflow: "hidden", width: "100%", height: "100%", ...style }}>
       <canvas ref={canvasRef} style={{ display: "block", width: "100%", height: "100%", touchAction: "manipulation", cursor: cursor && interactive ? "none" : undefined }} />
       {cursor && interactive && (
-        <div ref={dropRef} aria-hidden style={{ position: "absolute", left: 0, top: 0, width: 26, height: 26, borderRadius: "50%", pointerEvents: "none", opacity: 0, transition: "opacity .3s",
-          border: "1.5px solid rgba(255,255,255,.85)", background: "radial-gradient(circle at 35% 30%, rgba(255,255,255,.55), rgba(255,255,255,.08) 45%, rgba(255,255,255,0) 70%)",
-          boxShadow: "0 0 0 1px rgba(0,40,50,.15), 0 2px 10px rgba(0,30,40,.25)", backdropFilter: "blur(1.5px) saturate(1.4)" }} />
+        <>
+          <div ref={dropRef} aria-hidden style={{ position: "absolute", left: 0, top: 0, width: 30, height: 30, borderRadius: "50%", pointerEvents: "none", opacity: 0, transition: "opacity .3s", border: "1px solid rgba(255,255,255,.6)", boxShadow: "0 0 12px rgba(255,255,255,.12)" }} />
+          <div ref={dotRef} aria-hidden style={{ position: "absolute", left: 0, top: 0, width: 5, height: 5, borderRadius: "50%", pointerEvents: "none", opacity: 0, transition: "opacity .3s", background: "rgba(255,255,255,.95)", boxShadow: "0 0 6px rgba(255,255,255,.6)" }} />
+        </>
       )}
     </div>
   );

@@ -107,7 +107,7 @@ export function drawUnder(ctx: CanvasRenderingContext2D, pond: Pond, shadow = 0.
   ctx.filter = `blur(${Math.max(1, unit * 0.12 * sx)}px)`; ctx.fillStyle = `rgba(0,0,0,${shadow * 0.75})`;
   for (const p of pond.pads) { padPath(ctx, p.x + p.r * 0.35, p.y + p.r * 0.5, p.r, p.angle, p.notch); ctx.fill(); }
   ctx.fillStyle = `rgba(0,0,0,${shadow * 0.5})`;
-  for (const p of pond.petals) { petalPath(ctx, p.x + unit * 0.06, p.y + unit * 0.09, p.r, p.angle); ctx.fill(); }
+  for (const p of pond.petals) { petalPath(ctx, p.x + unit * 0.06, p.y + unit * 0.09, p.r * 1.6, p.angle); ctx.fill(); }
   ctx.restore();
   if (!fish) return;
 
@@ -165,10 +165,22 @@ export function drawTop(ctx: CanvasRenderingContext2D, pond: Pond) {
     ctx.fillStyle = grd; ctx.beginPath(); ctx.arc(p.x, p.y, r, 0, TAU); ctx.fill();
   }
   for (const p of pond.petals) {
-    // a cherry-blossom petal: pale pink, deeper at the base, a little curled
-    const grd = ctx.createLinearGradient(p.x - Math.cos(p.angle) * p.r, p.y - Math.sin(p.angle) * p.r, p.x + Math.cos(p.angle) * p.r, p.y + Math.sin(p.angle) * p.r);
-    grd.addColorStop(0, "#e9a8b8"); grd.addColorStop(1, "#fbeef0");
-    ctx.fillStyle = grd; petalPath(ctx, p.x, p.y, p.r, p.angle); ctx.fill();
+    // a fallen leaf: warm, with a darker midrib
+    const tone = ["#b8743a", "#c99a45", "#8f5a34", "#a8803c"][Math.floor((p.r * 997) % 4)];
+    const L = p.r * 1.8, c = Math.cos(p.angle), s2 = Math.sin(p.angle);
+    ctx.fillStyle = tone; ctx.beginPath();
+    ctx.moveTo(p.x - c * L, p.y - s2 * L);
+    ctx.quadraticCurveTo(p.x - s2 * L * 0.55, p.y + c * L * 0.55, p.x + c * L, p.y + s2 * L);
+    ctx.quadraticCurveTo(p.x + s2 * L * 0.55, p.y - c * L * 0.55, p.x - c * L, p.y - s2 * L); ctx.fill();
+    ctx.strokeStyle = "rgba(60,30,10,0.45)"; ctx.lineWidth = Math.max(0.5, p.r * 0.08);
+    ctx.beginPath(); ctx.moveTo(p.x - c * L * 1.15, p.y - s2 * L * 1.15); ctx.lineTo(p.x + c * L * 0.9, p.y + s2 * L * 0.9); ctx.stroke();
+  }
+  for (const b of pond.bubbles) {
+    if (b.age < 0) continue;
+    const k = Math.min(1, b.age / 0.3), r = b.r * (0.6 + 0.4 * k);
+    ctx.strokeStyle = `rgba(235,250,248,${0.55 * k})`; ctx.lineWidth = Math.max(0.6, r * 0.18);
+    ctx.beginPath(); ctx.arc(b.x, b.y, r, 0, TAU); ctx.stroke();
+    ctx.fillStyle = `rgba(255,255,255,${0.7 * k})`; ctx.beginPath(); ctx.arc(b.x - r * 0.35, b.y - r * 0.35, r * 0.25, 0, TAU); ctx.fill();
   }
   for (const p of pond.pads) drawPad(ctx, p);
 }

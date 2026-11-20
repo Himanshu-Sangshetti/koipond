@@ -29,6 +29,7 @@ export class Random {
 export type Activity = "drift" | "cruise" | "dart" | "rest" | "investigate" | "feed" | "flee";
 
 export interface Variety { name: string; base: string; spots: string[]; fin: string; spotCover: number }
+export const MINNOW: Variety = { name: "minnow", base: "#4c5a55", spots: [], fin: "#7c8c86", spotCover: 0 };
 export const VARIETIES: Variety[] = [
   { name: "kohaku", base: "#f6f2ea", spots: ["#e8380f"], fin: "#f6f2ea", spotCover: 0.45 },
   { name: "sanke", base: "#f6f2ea", spots: ["#e8380f", "#e8380f", "#17141c"], fin: "#f6f2ea", spotCover: 0.5 },
@@ -55,6 +56,7 @@ export interface Fish {
   finPhase: number; lastGulp: number;
 }
 
+export interface Bubble { x: number; y: number; r: number; age: number; life: number }
 export interface Pellet { x: number; y: number; vx: number; vy: number; age: number; eaten: boolean }
 export interface Ripple { x: number; y: number; age: number; power: number; kind: "tap" | "drop" | "nibble" | "wake" }
 export interface Pad { x: number; y: number; r: number; spin: number; angle: number; vx: number; vy: number; notch: number; tone: number; flower: boolean }
@@ -65,8 +67,10 @@ export interface PondOptions {
   /** Size of the fish relative to the pond's short side (default 0.11). */
   fishSize?: number;
   pads?: number;
-  /** Floating blossom petals. */
+  /** Floating blossom petals (or leaves). */
   petals?: number;
+  /** A small school of tiny dark fish. */
+  minnows?: number;
   /** Rectangles (pond pixels) fish prefer to stay out of, e.g. behind a headline. */
   keepClear?: { x: number; y: number; w: number; h: number }[];
 }
@@ -75,7 +79,7 @@ const JOINTS = 16, TAIL = 4;
 
 export class Pond {
   w: number; h: number; t = 0;
-  fish: Fish[] = []; pellets: Pellet[] = []; ripples: Ripple[] = []; pads: Pad[] = []; petals: Petal[] = [];
+  fish: Fish[] = []; bubbles: Bubble[] = []; pellets: Pellet[] = []; ripples: Ripple[] = []; pads: Pad[] = []; petals: Petal[] = [];
   current: V = { x: 0, y: 0 };
   /** 0..1: how hard it is raining. */
   rain = 0;
@@ -92,6 +96,14 @@ export class Pond {
     this.unit = Math.min(o.width, o.height) * (o.fishSize ?? 0.14);
     this.keepClear = o.keepClear ?? [];
     for (let i = 0; i < (o.fish ?? 9); i++) this.fish.push(this.makeFish(i));
+    for (let i = 0; i < (o.minnows ?? 0); i++) {
+      const m = this.makeFish(1000 + i);
+      m.variety = MINNOW; m.spots = []; m.length = this.unit * this.rnd.between(0.24, 0.32); m.girth = m.length * 0.13;
+      m.bold = 0.1; m.restless = 0.95; m.depth = this.rnd.between(0.3, 0.6);
+      const seg = m.length / (JOINTS - 1); m.joints.forEach((j, k) => { j.x = m.x - Math.cos(m.heading) * seg * k; j.y = m.y - Math.sin(m.heading) * seg * k; });
+      m.tail.forEach((j, k) => { j.x = m.x - Math.cos(m.heading) * (m.length + seg * 0.8 * (k + 1)); j.y = m.y - Math.sin(m.heading) * (m.length + seg * 0.8 * (k + 1)); });
+      this.fish.push(m);
+    }
     for (let i = 0; i < (o.pads ?? 3); i++) { const pad = this.makePad(); if (i === 0) { pad.flower = true; pad.tone = 0.3; } this.pads.push(pad); }
     for (let i = 0; i < (o.petals ?? 9); i++) { const r = this.rnd; this.petals.push({ x: r.between(0, 1) * this.w, y: r.between(0, 1) * this.h, r: this.unit * r.between(0.06, 0.1), spin: r.between(-0.4, 0.4), angle: r.between(0, TAU), vx: 0, vy: 0 }); }
   }
@@ -131,7 +143,7 @@ export class Pond {
   ripple(x: number, y: number, kind: Ripple["kind"] = "tap", power = 1) {
     const rings = kind === "tap" ? 3 : 1;
     for (let i = 0; i < rings; i++) this.ripples.push({ x, y, age: -i * 0.09, power: power * (1 - i * 0.22), kind });
-    if (this.ripples.length > 24) this.ripples.splice(0, this.ripples.length - 24);
+    if (this.ripples.length > 48) this.ripples.splice(0, this.ripples.length - 48);
     // a ripple pushes floating pads and startles shy fish nearby
     for (const p of this.pads) { const dx = p.x - x, dy = p.y - y, d = len(dx, dy) || 1; if (d < this.unit * 2.2) { const f = (1 - d / (this.unit * 2.2)) * this.unit * 0.6 * power; p.vx += dx / d * f; p.vy += dy / d * f; } }
     for (const p of this.petals) { const dx = p.x - x, dy = p.y - y, d = len(dx, dy) || 1; if (d < this.unit * 2.5) { const f = (1 - d / (this.unit * 2.5)) * this.unit * 1.4 * power; p.vx += dx / d * f; p.vy += dy / d * f; p.spin += (this.rnd.next() - 0.5) * 1.5 * power; } }
@@ -150,9 +162,9 @@ export class Pond {
     p.speed = p.speed * 0.6 + moved * 0.4; p.x = x; p.y = y; p.inside = inside;
     if (moved > 0.5) p.still = 0;
     // a finger moving through the water drags a wake behind it
-    if (inside && len(x - this.lastWake.x, y - this.lastWake.y) > this.unit * 0.05) {
-      const fresh = this.lastWake.x < -1e8 || len(x - this.lastWake.x, y - this.lastWake.y) > this.unit * 1.5;
-      if (!fresh) this.ripple(x, y, "wake", Math.min(1, p.speed / (this.unit * 0.12)) * 0.9);
+    if (inside && len(x - this.lastWake.x, y - this.lastWake.y) > this.unit * 0.12) {
+      const fresh = this.lastWake.x < -1e8 || len(x - this.lastWake.x, y - this.lastWake.y) > this.unit * 2;
+      if (!fresh) this.ripple(x, y, "wake", 0.45 + Math.min(0.5, p.speed / (this.unit * 0.25)));
       this.lastWake = { x, y };
     }
     if (!inside) this.lastWake = { x: -1e9, y: -1e9 };
@@ -213,6 +225,13 @@ export class Pond {
     this.nextDrop -= dt;
     while (this.nextDrop < 0) { this.ripple(this.rnd.between(0, this.w), this.rnd.between(0, this.h), "drop", 0.55 + this.rain * 0.3); this.nextDrop += this.rnd.between(2.5, 6) / (1 + this.rain * 40); }
 
+    // bubbles: now and then a koi breathes out a few; they surface, sit a moment, and pop
+    for (const f of this.fish) if (f.variety !== MINNOW && this.rnd.next() < dt * 0.12) {
+      const n = 1 + Math.floor(this.rnd.next() * 3);
+      for (let k = 0; k < n; k++) this.bubbles.push({ x: f.x + this.rnd.between(-1, 1) * f.girth, y: f.y + this.rnd.between(-1, 1) * f.girth, r: u * this.rnd.between(0.025, 0.05), age: -k * 0.25, life: this.rnd.between(1.5, 3.5) });
+    }
+    for (const b of this.bubbles) { b.age += dt; b.x += this.current.x * u * 0.2 * dt; b.y += this.current.y * u * 0.2 * dt; if (b.age > b.life) this.ripple(b.x, b.y, "nibble", 0.25); }
+    this.bubbles = this.bubbles.filter((b) => b.age <= b.life).slice(-60);
     for (const r of this.ripples) r.age += dt;
     this.ripples = this.ripples.filter((r) => r.age < (r.kind === "tap" ? 2.6 : r.kind === "drop" ? 1.6 : 1.0));
 
@@ -240,7 +259,7 @@ export class Pond {
 
       // a fast pointer close by is a threat; a still one is interesting
       const pd = len(ptr.x - f.x, ptr.y - f.y);
-      if (ptr.inside && ptr.speed > u * 0.18 && pd < u * (1.2 + (1 - f.bold)) && f.activity !== "flee" && !slot) this.setActivity(f, "flee", 0.8, { x: ptr.x, y: ptr.y });
+      if (ptr.inside && ptr.speed > u * 0.4 && pd < u * (0.6 + 0.5 * (1 - f.bold)) && f.activity !== "flee" && !slot) this.setActivity(f, "flee", 0.6, { x: ptr.x, y: ptr.y });
       if (f.activityLeft <= 0 && !slot) this.choose(f);
       if (f.activity === "feed" && (!f.target || (f.target as Pellet).eaten)) this.choose(f);
 

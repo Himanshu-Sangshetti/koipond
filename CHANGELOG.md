@@ -10,5 +10,5 @@ First release.
 - Water: GPU wave simulation (taps, drops, wakes), refraction, depth colour, light on the floor and on ripples.
 - Interaction: glide to leave a wake, tap for a splash, double-tap or long-press to feed, scroll or swipe to stir.
 - Scene: lily pads (some flowering), corner rocks, rain, falling sakura, water plants, minnows, bubbles.
-- Looks: `natural`, `ink` (woodblock print), `garden`, plus dithered `violet`, `ember`, `mono`.
+- Looks: `natural`, `ink` (woodblock print), and dithered `violet`, `ember`, `mono` (koi lifted into the light tones).
 - Pauses off screen; a still pond for `prefers-reduced-motion`.

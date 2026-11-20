@@ -344,6 +344,11 @@ void main(){
   if (mode < .5){
     col = mix(srgb(col), tp.rgb, tp.a);
     float l = pow(clamp(dot(col, vec3(.299, .587, .114)) * 1.05, 0., 1.), 1.1);
+    // the water sits low (dark, quiet); the koi are lifted into the light tones so they read clearly,
+    // whites to the brightest colour, red and orange patches one step down, sumi stays dark
+    float fl0 = dot(srgb(frgb), vec3(.299, .587, .114));
+    float koiL = fl0 > .62 ? .98 : fl0 > .3 ? .7 : .22;
+    l = mix(l * .72, koiL, smoothstep(.5, .85, isFish) * (1. - tp.a));
     float k = clamp(l * 3. + bayer(gl_FragCoord.xy / px) - .5, 0., 3.);
     o = vec4(k < 1. ? mix(c0, c1, step(.5, k)) : k < 2. ? mix(c1, c2, step(1.5, k)) : mix(c2, c3, step(2.5, k)), 1);
   } else {

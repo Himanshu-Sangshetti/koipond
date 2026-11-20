@@ -40,16 +40,17 @@ anything else that renders React. `react` and `three` are peer dependencies; not
 |---|---|
 | `natural` | clear teal water over a stone floor (default) |
 | `ink` | a woodblock print: indigo water in soft steps, ink outlines, flat colour, paper grain |
-| `garden` | soft grey-sage water over river pebbles, a faded film grade |
-| `violet`, `ember`, `mono` | the same pond through a 4-colour ordered dither |
+| `violet` | dithered: dark violet water, the koi glowing in the light tones (also `ember`, `mono`) |
 
 The look can change at any time; the fish carry on swimming.
+
+![koipond, dither look](media/dither.jpg)
 
 ## Props
 
 | Prop | Default | |
 |---|---|---|
-| `look` | `"natural"` | one of the looks above, or your own `Look` object |
+| `look` | `"natural"` | `"natural"`, `"ink"`, `"violet"`, `"ember"`, `"mono"`, or your own `Look` object |
 | `fish` | `12` | number of koi |
 | `fishSize` | `0.18` | koi length relative to the pond's short side |
 | `pads` | `4` | floating lily pads (some flower) |

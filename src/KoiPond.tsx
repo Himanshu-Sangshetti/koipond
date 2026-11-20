@@ -189,7 +189,12 @@ export const KoiPond = forwardRef<KoiPondHandle, KoiPondProps>(function KoiPond(
       if (visible && !reduced) raf = requestAnimationFrame(loop);
     };
     if (reduced) { for (let i = 0; i < 120; i++) pond!.step(1 / 60); }
-    raf = requestAnimationFrame(loop);
+    // frame-exact capture (for recording videos): the page drives frames itself via window.__koiFrame(dt)
+    const manual = (window as unknown as { __koiManual?: boolean }).__koiManual;
+    if (manual) {
+      let simNow = performance.now(); last = simNow;
+      (window as unknown as { __koiFrame?: (dt: number) => void }).__koiFrame = (dt: number) => { simNow += dt * 1000; visible = false; loop(simNow); };
+    } else raf = requestAnimationFrame(loop);
 
     return () => {
       cancelAnimationFrame(raf); ro.disconnect(); io.disconnect();

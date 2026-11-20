@@ -1,0 +1,342 @@
+// koipond — the simulation. Pure TypeScript, no DOM. Units are pond pixels.
+//
+// How a fish works here:
+//   • Mood: every fish has a temperament (bold ↔ shy, lazy ↔ restless) that shapes all its choices.
+//   • Intent: a small set of activities (drift, cruise, dart, rest, investigate, feed, flee), chosen by
+//     weighted chance from its mood and what is happening around it, each lasting a while.
+//   • Steering: the activity sets a goal heading and speed; neighbours, walls and the water current
+//     bend that goal. The fish turns toward it with limited, speed-dependent turning (a heavy body).
+//   • Body: a chain of joints pulled along by the head, with a cap on how sharply any joint can bend,
+//     so the body curves through turns but can never kink or fold. A muscle wave travels nose → tail
+//     with an amplitude that rises toward the tail and with how hard the fish is swimming.
+//   • Tail fin: its own short chain on springs, so it trails and flicks after the body (follow-through).
+
+export type V = { x: number; y: number };
+const TAU = Math.PI * 2;
+const angleDiff = (a: number, b: number) => Math.atan2(Math.sin(a - b), Math.cos(a - b));
+const clamp = (v: number, lo: number, hi: number) => (v < lo ? lo : v > hi ? hi : v);
+const len = (x: number, y: number) => Math.sqrt(x * x + y * y);
+
+export class Random {
+  private s: number;
+  constructor(seed = 1) { this.s = seed >>> 0 || 1; }
+  /** mulberry32 */
+  next() { let t = (this.s = (this.s + 0x6d2b79f5) >>> 0); t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }
+  between(a: number, b: number) { return a + (b - a) * this.next(); }
+  pick<T>(xs: readonly T[]) { return xs[Math.floor(this.next() * xs.length)]; }
+}
+
+export type Activity = "drift" | "cruise" | "dart" | "rest" | "investigate" | "feed" | "flee";
+
+export interface Variety { name: string; base: string; spots: string[]; fin: string; spotCover: number }
+export const VARIETIES: Variety[] = [
+  { name: "kohaku", base: "#f6f2ea", spots: ["#e8380f"], fin: "#f6f2ea", spotCover: 0.45 },
+  { name: "sanke", base: "#f6f2ea", spots: ["#e8380f", "#e8380f", "#17141c"], fin: "#f6f2ea", spotCover: 0.5 },
+  { name: "showa", base: "#17141c", spots: ["#e8380f", "#f6f2ea"], fin: "#d9d3cc", spotCover: 0.55 },
+  { name: "ogon", base: "#f1c24f", spots: [], fin: "#f5d27a", spotCover: 0 },
+  { name: "chagoi", base: "#b98a5a", spots: [], fin: "#caa27a", spotCover: 0 },
+  { name: "tancho", base: "#f6f2ea", spots: [], fin: "#f6f2ea", spotCover: 0 },
+  { name: "asagi", base: "#7d93a8", spots: ["#e8380f"], fin: "#c9d3dc", spotCover: 0.25 },
+  { name: "yamabuki", base: "#f0a53a", spots: ["#f6f2ea"], fin: "#f4bf6a", spotCover: 0.2 },
+];
+
+/** A spot on the body, in body coordinates: u along the body (0 nose, 1 tail root), v across (-1..1). */
+export interface Spot { u: number; v: number; ru: number; rv: number; color: string }
+
+export interface Fish {
+  id: number; variety: Variety; spots: Spot[];
+  length: number; girth: number;              // body length, max half-width
+  bold: number; restless: number;             // temperament 0..1
+  x: number; y: number; heading: number; speed: number; turn: number;
+  activity: Activity; activityLeft: number; goalHeading: number; goalSpeed: number; target: V | null;
+  effort: number; beat: number;               // swim effort 0..1+, muscle wave phase
+  depth: number; depthGoal: number;           // 0 surface .. 1 deep
+  joints: V[]; tail: V[]; tailVel: V[];
+  finPhase: number; lastGulp: number;
+}
+
+export interface Pellet { x: number; y: number; vx: number; vy: number; age: number; eaten: boolean }
+export interface Ripple { x: number; y: number; age: number; power: number; kind: "tap" | "drop" | "nibble" | "wake" }
+export interface Pad { x: number; y: number; r: number; spin: number; angle: number; vx: number; vy: number; notch: number }
+export interface Petal { x: number; y: number; r: number; spin: number; angle: number; vx: number; vy: number }
+
+export interface PondOptions {
+  width: number; height: number; fish?: number; seed?: number;
+  /** Size of the fish relative to the pond's short side (default 0.11). */
+  fishSize?: number;
+  pads?: number;
+  /** Floating blossom petals. */
+  petals?: number;
+  /** Rectangles (pond pixels) fish prefer to stay out of, e.g. behind a headline. */
+  keepClear?: { x: number; y: number; w: number; h: number }[];
+}
+
+const JOINTS = 16, TAIL = 4;
+
+export class Pond {
+  w: number; h: number; t = 0;
+  fish: Fish[] = []; pellets: Pellet[] = []; ripples: Ripple[] = []; pads: Pad[] = []; petals: Petal[] = [];
+  current: V = { x: 0, y: 0 };
+  pointer: { x: number; y: number; still: number; speed: number; inside: boolean } = { x: 0, y: 0, still: 0, speed: 0, inside: false };
+  keepClear: NonNullable<PondOptions["keepClear"]>;
+  private rnd: Random;
+  private unit: number;
+  private nextDrop = 2;
+  private formation: { slots: V[]; flow: V[]; owner: number[] } | null = null;
+
+  constructor(o: PondOptions) {
+    this.w = o.width; this.h = o.height; this.rnd = new Random(o.seed ?? 7);
+    this.unit = Math.min(o.width, o.height) * (o.fishSize ?? 0.14);
+    this.keepClear = o.keepClear ?? [];
+    for (let i = 0; i < (o.fish ?? 9); i++) this.fish.push(this.makeFish(i));
+    for (let i = 0; i < (o.pads ?? 3); i++) this.pads.push(this.makePad());
+    for (let i = 0; i < (o.petals ?? 9); i++) { const r = this.rnd; this.petals.push({ x: r.between(0, 1) * this.w, y: r.between(0, 1) * this.h, r: this.unit * r.between(0.06, 0.1), spin: r.between(-0.4, 0.4), angle: r.between(0, TAU), vx: 0, vy: 0 }); }
+  }
+
+  private makeFish(id: number): Fish {
+    const r = this.rnd, variety = VARIETIES[id % VARIETIES.length];
+    const length = this.unit * r.between(0.78, 1.25), girth = length * r.between(0.1, 0.125);
+    const x = r.between(0.1, 0.9) * this.w, y = r.between(0.12, 0.88) * this.h, heading = r.between(-Math.PI, Math.PI);
+    const joints: V[] = [], seg = length / (JOINTS - 1);
+    for (let i = 0; i < JOINTS; i++) joints.push({ x: x - Math.cos(heading) * seg * i, y: y - Math.sin(heading) * seg * i });
+    const last = joints[JOINTS - 1], tail: V[] = [], tailVel: V[] = [];
+    for (let i = 1; i <= TAIL; i++) { tail.push({ x: last.x - Math.cos(heading) * seg * 0.8 * i, y: last.y - Math.sin(heading) * seg * 0.8 * i }); tailVel.push({ x: 0, y: 0 }); }
+    // spots: a few soft blobs; tancho gets its single red crown
+    const spots: Spot[] = [];
+    if (variety.name === "tancho") spots.push({ u: 0.07, v: 0, ru: 0.055, rv: 0.55, color: "#e8380f" });
+    let cover = 0;
+    while (cover < variety.spotCover) {
+      const ru = r.between(0.06, 0.15), rv = r.between(0.4, 0.95);
+      spots.push({ u: r.between(0.05, 0.85), v: r.between(-0.5, 0.5), ru, rv, color: r.pick(variety.spots) });
+      cover += ru * rv * 1.1;
+    }
+    return {
+      id, variety, spots, length, girth, bold: r.next(), restless: r.next(),
+      x, y, heading, speed: 0, turn: 0, activity: "drift", activityLeft: r.between(0.5, 3), goalHeading: heading, goalSpeed: 0, target: null,
+      effort: 0.3, beat: r.between(0, TAU), depth: r.between(0.1, 0.6), depthGoal: 0.3, joints, tail, tailVel, finPhase: r.between(0, TAU), lastGulp: -99,
+    };
+  }
+
+  private makePad(): Pad {
+    const r = this.rnd;
+    return { x: r.between(0, 1) * this.w, y: r.between(0, 1) * this.h, r: this.unit * r.between(0.28, 0.5), spin: r.between(-0.03, 0.03), angle: r.between(0, TAU), vx: 0, vy: 0, notch: r.between(0.25, 0.45) };
+  }
+
+  // ------------------------------------------------------------------------------------- events
+  ripple(x: number, y: number, kind: Ripple["kind"] = "tap", power = 1) {
+    const rings = kind === "tap" ? 3 : 1;
+    for (let i = 0; i < rings; i++) this.ripples.push({ x, y, age: -i * 0.09, power: power * (1 - i * 0.22), kind });
+    if (this.ripples.length > 24) this.ripples.splice(0, this.ripples.length - 24);
+    // a ripple pushes floating pads and startles shy fish nearby
+    for (const p of this.pads) { const dx = p.x - x, dy = p.y - y, d = len(dx, dy) || 1; if (d < this.unit * 2.2) { const f = (1 - d / (this.unit * 2.2)) * this.unit * 0.6 * power; p.vx += dx / d * f; p.vy += dy / d * f; } }
+    for (const p of this.petals) { const dx = p.x - x, dy = p.y - y, d = len(dx, dy) || 1; if (d < this.unit * 2.5) { const f = (1 - d / (this.unit * 2.5)) * this.unit * 1.4 * power; p.vx += dx / d * f; p.vy += dy / d * f; p.spin += (this.rnd.next() - 0.5) * 1.5 * power; } }
+    if (kind === "tap") for (const f of this.fish) { const d = len(f.x - x, f.y - y); if (d < this.unit * 1.6 && f.bold < 0.45) this.setActivity(f, "flee", 0.9, { x, y }); }
+  }
+
+  /** Scatter a few food pellets around a point; nearby fish come to feed. */
+  feed(x: number, y: number, n = 5) {
+    for (let i = 0; i < n; i++) { const a = this.rnd.between(0, TAU), s = this.rnd.between(4, 22); this.pellets.push({ x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s, age: 0, eaten: false }); }
+    if (this.pellets.length > 40) this.pellets.splice(0, this.pellets.length - 40);
+    this.ripple(x, y, "drop", 0.8);
+  }
+
+  setPointer(x: number, y: number, inside: boolean) {
+    const p = this.pointer, moved = len(x - p.x, y - p.y);
+    p.speed = p.speed * 0.6 + moved * 0.4; p.x = x; p.y = y; p.inside = inside;
+    if (moved > 0.5) p.still = 0;
+  }
+
+  /** Ask the fish to hold a shape: a slot for each fish and the direction to swim through it. */
+  setFormation(slots: V[] | null, flow?: V[]) {
+    if (!slots) { if (this.formation) for (const f of this.fish) this.setActivity(f, this.rnd.next() < 0.5 ? "dart" : "cruise"); this.formation = null; return; }
+    if (!this.formation) {
+      const free = slots.map((_, i) => i), owner: number[] = [];
+      for (const f of this.fish) {
+        if (!free.length) { owner.push(-1); continue; }
+        let best = 0, bd = Infinity;
+        free.forEach((s, k) => { const d = len(slots[s].x - f.x, slots[s].y - f.y); if (d < bd) { bd = d; best = k; } });
+        owner.push(free.splice(best, 1)[0]);
+      }
+      this.formation = { slots, flow: flow ?? slots.map(() => ({ x: 1, y: 0 })), owner };
+    } else { this.formation.slots = slots; if (flow) this.formation.flow = flow; }
+  }
+
+  resize(w: number, h: number) {
+    const sx = w / this.w, sy = h / this.h;
+    for (const f of this.fish) { f.x *= sx; f.y *= sy; for (const j of [...f.joints, ...f.tail]) { j.x *= sx; j.y *= sy; } }
+    for (const p of [...this.pads, ...this.petals]) { p.x *= sx; p.y *= sy; }
+    this.w = w; this.h = h;
+  }
+
+  // ---------------------------------------------------------------------------------- behaviour
+  private setActivity(f: Fish, a: Activity, seconds?: number, target: V | null = null) {
+    f.activity = a; f.target = target;
+    const span: Record<Activity, [number, number]> = { drift: [2, 6], cruise: [2.5, 7], dart: [0.35, 0.8], rest: [1.2, 4], investigate: [2, 5], feed: [3, 8], flee: [0.6, 1.2] };
+    f.activityLeft = seconds ?? this.rnd.between(span[a][0], span[a][1]) * (a === "rest" ? 1.4 - f.restless : 1);
+    if (a === "dart") f.goalHeading = f.heading + this.rnd.between(-0.9, 0.9);
+  }
+
+  private choose(f: Fish) {
+    // food first, then curiosity about a still pointer, otherwise mood decides
+    const pellet = this.nearestPellet(f, this.unit * 4);
+    if (pellet) return this.setActivity(f, "feed", undefined, pellet);
+    const p = this.pointer;
+    if (p.inside && p.still > 1.2 && len(p.x - f.x, p.y - f.y) < this.unit * 3.5 && this.rnd.next() < 0.35 + f.bold * 0.5) return this.setActivity(f, "investigate", undefined, { x: p.x, y: p.y });
+    const r = this.rnd.next(), rest = 0.18 * (1 - f.restless), dart = 0.08 + 0.12 * f.restless, cruise = 0.32 + 0.2 * f.restless;
+    this.setActivity(f, r < rest ? "rest" : r < rest + dart ? "dart" : r < rest + dart + cruise ? "cruise" : "drift");
+  }
+
+  private nearestPellet(f: Fish, within: number): Pellet | null {
+    let best: Pellet | null = null, bd = within;
+    for (const p of this.pellets) { if (p.eaten) continue; const d = len(p.x - f.x, p.y - f.y); if (d < bd) { bd = d; best = p; } }
+    return best;
+  }
+
+  step(dt: number) {
+    this.t += dt;
+    const u = this.unit, ptr = this.pointer;
+    ptr.still += dt; ptr.speed *= Math.exp(-dt * 6);
+
+    // ambient life: an occasional drop on the surface
+    this.nextDrop -= dt;
+    if (this.nextDrop < 0) { this.ripple(this.rnd.between(0, this.w), this.rnd.between(0, this.h), "drop", 0.55); this.nextDrop = this.rnd.between(2.5, 6); }
+
+    for (const r of this.ripples) r.age += dt;
+    this.ripples = this.ripples.filter((r) => r.age < (r.kind === "tap" ? 2.6 : r.kind === "drop" ? 1.6 : 1.0));
+
+    for (const p of this.pellets) { p.age += dt; p.x += p.vx * dt + this.current.x * 6 * dt; p.y += p.vy * dt + this.current.y * 6 * dt; p.vx *= Math.exp(-dt * 2.5); p.vy *= Math.exp(-dt * 2.5); }
+    this.pellets = this.pellets.filter((p) => !p.eaten && p.age < 40);
+
+    for (const p of this.pads) {
+      p.vx += (this.current.x * u * 0.25 - p.vx) * dt * 0.6; p.vy += (this.current.y * u * 0.25 - p.vy) * dt * 0.6;
+      p.vx *= Math.exp(-dt * 0.8); p.vy *= Math.exp(-dt * 0.8);
+      p.x += p.vx * dt + Math.sin(this.t * 0.1 + p.angle) * u * 0.02 * dt; p.y += p.vy * dt + Math.cos(this.t * 0.08 + p.angle) * u * 0.02 * dt;
+      p.angle += p.spin * dt;
+      const m = p.r; if (p.x < -m) p.x = this.w + m; if (p.x > this.w + m) p.x = -m; if (p.y < -m) p.y = this.h + m; if (p.y > this.h + m) p.y = -m;
+    }
+
+    for (const p of this.petals) {
+      p.vx += (this.current.x * u * 0.4 + Math.sin(this.t * 0.13 + p.angle) * u * 0.03 - p.vx) * dt * 0.5;
+      p.vy += (this.current.y * u * 0.4 + Math.cos(this.t * 0.11 + p.r) * u * 0.03 - p.vy) * dt * 0.5;
+      p.x += p.vx * dt; p.y += p.vy * dt; p.angle += p.spin * dt; p.spin *= Math.exp(-dt * 0.6);
+      const m = p.r * 2; if (p.x < -m) p.x = this.w + m; if (p.x > this.w + m) p.x = -m; if (p.y < -m) p.y = this.h + m; if (p.y > this.h + m) p.y = -m;
+    }
+    const fm = this.formation;
+    this.fish.forEach((f, idx) => {
+      f.activityLeft -= dt;
+      const slot = fm && fm.owner[idx] >= 0 ? fm.slots[fm.owner[idx]] : null;
+
+      // a fast pointer close by is a threat; a still one is interesting
+      const pd = len(ptr.x - f.x, ptr.y - f.y);
+      if (ptr.inside && ptr.speed > u * 0.18 && pd < u * (1.2 + (1 - f.bold)) && f.activity !== "flee" && !slot) this.setActivity(f, "flee", 0.8, { x: ptr.x, y: ptr.y });
+      if (f.activityLeft <= 0 && !slot) this.choose(f);
+      if (f.activity === "feed" && (!f.target || (f.target as Pellet).eaten)) this.choose(f);
+
+      // ----- what does it want?
+      let gx = Math.cos(f.heading), gy = Math.sin(f.heading), want = 0;
+      const wander = Math.sin(this.t * (0.21 + f.restless * 0.2) + f.id * 3.1) * 0.6 + Math.sin(this.t * 0.07 + f.id) * 0.4;
+      switch (f.activity) {
+        case "drift": gx = Math.cos(f.heading + wander * 0.9); gy = Math.sin(f.heading + wander * 0.9); want = u * 0.32; break;
+        case "cruise": gx = Math.cos(f.heading + wander * 0.5); gy = Math.sin(f.heading + wander * 0.5); want = u * (0.55 + f.restless * 0.25); break;
+        case "dart": gx = Math.cos(f.goalHeading); gy = Math.sin(f.goalHeading); want = u * 2.1; break;
+        case "rest": want = u * 0.04; break;
+        case "investigate": case "feed": {
+          const tg = f.target!; const dx = tg.x - f.x, dy = tg.y - f.y, d = len(dx, dy) || 1;
+          gx = dx / d; gy = dy / d; want = clamp(d * 0.9, u * 0.1, u * (f.activity === "feed" ? 1.3 : 0.6));
+          if (f.activity === "feed" && d < f.girth * 1.6) { (tg as Pellet).eaten = true; this.ripple(tg.x, tg.y, "nibble", 0.7); f.lastGulp = this.t; this.setActivity(f, "drift", 1.2); }
+          if (f.activity === "investigate" && d < f.length * 0.55) { want = 0; if (this.t - f.lastGulp > 2.5 && this.rnd.next() < dt * 0.8) { this.ripple(f.x + gx * f.girth, f.y + gy * f.girth, "nibble", 0.5); f.lastGulp = this.t; } }
+          break;
+        }
+        case "flee": { const tg = f.target!; const dx = f.x - tg.x, dy = f.y - tg.y, d = len(dx, dy) || 1; gx = dx / d; gy = dy / d; want = u * 2.6; break; }
+      }
+      if (slot) {
+        const dx = slot.x - f.x, dy = slot.y - f.y, d = len(dx, dy) || 1, fl = fm!.flow[fm!.owner[idx]];
+        const arrive = clamp(d / (f.length * 1.2), 0, 1);
+        gx = dx / d * arrive + fl.x * (1 - arrive); gy = dy / d * arrive + fl.y * (1 - arrive);
+        want = clamp(d * 1.8, u * 0.45, u * 2.4);
+      }
+
+      // ----- the world bends the wish: neighbours, walls, keep-clear areas, current
+      let ax = 0, ay = 0;
+      for (const o of this.fish) {
+        if (o === f) continue;
+        // keep clear of the other fish's whole body (sampled joints), not just its head
+        for (let j = 0; j < JOINTS; j += 5) {
+          const dx = f.x - o.joints[j].x, dy = f.y - o.joints[j].y, d = len(dx, dy), R = (f.length + o.length) * 0.32;
+          if (d > 0 && d < R) { const k = (1 - d / R) ** 2 * 3; ax += dx / d * k; ay += dy / d * k; }
+        }
+        if (!slot && f.activity !== "flee") { const d = len(o.x - f.x, o.y - f.y); if (d < u * 2.2) { const k = (1 - d / (u * 2.2)) * 0.18; ax += Math.cos(o.heading) * k; ay += Math.sin(o.heading) * k; } }
+      }
+      const look = f.length * (0.8 + f.speed / (u * 2)), lx = f.x + Math.cos(f.heading) * look, ly = f.y + Math.sin(f.heading) * look, m = u * 0.45;
+      if (lx < m) ax += (m - lx) / m * 2.5; if (lx > this.w - m) ax -= (lx - (this.w - m)) / m * 2.5;
+      if (ly < m) ay += (m - ly) / m * 2.5; if (ly > this.h - m) ay -= (ly - (this.h - m)) / m * 2.5;
+      if (!slot) for (const z of this.keepClear) {
+        if (lx > z.x && lx < z.x + z.w && ly > z.y && ly < z.y + z.h) { const cx = z.x + z.w / 2, cy = z.y + z.h / 2, dx = f.x - cx, dy = (f.y - cy) * (z.w / Math.max(1, z.h)), d = len(dx, dy) || 1; ax += dx / d * 1.4; ay += dy / d * 1.4; }
+      }
+      gx += ax + this.current.x * 1.6; gy += ay + this.current.y * 1.6;
+      want += len(this.current.x, this.current.y) * u * 0.9;
+      f.goalSpeed = want;
+
+      // ----- heavy body: turning is limited, faster when moving, sharper in a dart
+      const goal = Math.atan2(gy, gx), err = angleDiff(goal, f.heading);
+      const agility = (0.9 + 2.4 * clamp(f.speed / (u * 1.2), 0, 1)) * (f.activity === "dart" || f.activity === "flee" ? 1.6 : 1);
+      f.turn += (clamp(err * 3, -agility, agility) - f.turn) * (1 - Math.exp(-dt * 6));
+      f.heading += f.turn * dt;
+      const accel = f.goalSpeed > f.speed ? (f.activity === "dart" || f.activity === "flee" ? 7 : 1.6) : 1.1;
+      f.speed += (f.goalSpeed - f.speed) * (1 - Math.exp(-dt * accel));
+      f.x += Math.cos(f.heading) * f.speed * dt; f.y += Math.sin(f.heading) * f.speed * dt;
+
+      // swim effort: thrust when speeding up or turning hard, near-still tail while gliding
+      const thrust = clamp((f.goalSpeed - f.speed) / (u * 0.6), 0, 1) + Math.abs(f.turn) * 0.25 + f.speed / (u * 3);
+      f.effort += (clamp(thrust, 0.06, 1.3) - f.effort) * (1 - Math.exp(-dt * 3));
+      f.beat += dt * (1.2 + f.effort * 7.5);
+      f.finPhase += dt * (1.4 + (f.activity === "rest" || f.activity === "investigate" ? 2.2 : 0));
+
+      // depth drifts slowly; feeding and curiosity bring a fish up to the surface
+      if (this.rnd.next() < dt * 0.06) f.depthGoal = this.rnd.next() < 0.3 ? this.rnd.between(0.55, 0.85) : this.rnd.between(0.05, 0.35);
+      const goalDepth = f.activity === "feed" || f.activity === "investigate" || slot ? 0.05 : f.depthGoal;
+      f.depth += (goalDepth - f.depth) * (1 - Math.exp(-dt * 0.4));
+
+      // a fast fish close to the surface leaves a faint wake
+      if (f.depth < 0.25 && f.speed > u * 1.4 && this.rnd.next() < dt * 6) this.ripple(f.joints[3].x, f.joints[3].y, "wake", 0.35);
+
+      this.updateBody(f, dt);
+    });
+  }
+
+  private updateBody(f: Fish, dt: number) {
+    const seg = f.length / (JOINTS - 1), J = f.joints, maxBend = 0.13; // radians per joint: ~110° across the whole body at most
+    J[0].x = f.x; J[0].y = f.y;
+    let prevAng = f.heading + Math.PI; // direction pointing backward from the head
+    for (let i = 1; i < JOINTS; i++) {
+      let ang = Math.atan2(J[i].y - J[i - 1].y, J[i].x - J[i - 1].x);
+      const bend = angleDiff(ang, prevAng);
+      if (Math.abs(bend) > maxBend) ang = prevAng + Math.sign(bend) * maxBend;
+      J[i].x = J[i - 1].x + Math.cos(ang) * seg; J[i].y = J[i - 1].y + Math.sin(ang) * seg;
+      prevAng = ang;
+    }
+    // tail fin: springs toward where a straight continuation of the body would put it
+    let ax = J[JOINTS - 1].x, ay = J[JOINTS - 1].y, dir = prevAng;
+    for (let i = 0; i < TAIL; i++) {
+      const rest = { x: ax + Math.cos(dir) * seg * 0.8, y: ay + Math.sin(dir) * seg * 0.8 }, p = f.tail[i], v = f.tailVel[i];
+      v.x += (rest.x - p.x) * 140 * dt; v.y += (rest.y - p.y) * 140 * dt; v.x *= Math.exp(-dt * 14); v.y *= Math.exp(-dt * 14);
+      p.x += v.x * dt; p.y += v.y * dt;
+      const dx = p.x - ax, dy = p.y - ay, d = len(dx, dy) || 1; p.x = ax + dx / d * seg * 0.8; p.y = ay + dy / d * seg * 0.8;
+      dir = Math.atan2(p.y - ay, p.x - ax); ax = p.x; ay = p.y;
+    }
+  }
+
+  /** Spine with the muscle wave applied, for drawing. */
+  pose(f: Fish): V[] {
+    const out: V[] = [];
+    for (let i = 0; i < JOINTS; i++) {
+      const s = i / (JOINTS - 1), a = f.joints[Math.max(0, i - 1)], b = f.joints[Math.min(JOINTS - 1, i + 1)];
+      let tx = a.x - b.x, ty = a.y - b.y; const tl = len(tx, ty) || 1; tx /= tl; ty /= tl;
+      // amplitude: a little at the head, rising through the tail; strongest when working hard
+      const amp = f.girth * (0.12 + 1.5 * s * s) * (0.15 + 0.85 * clamp(f.effort, 0, 1.2));
+      const w = Math.sin(f.beat - s * 5.4) * amp;
+      out.push({ x: f.joints[i].x - ty * w, y: f.joints[i].y + tx * w });
+    }
+    return out;
+  }
+}

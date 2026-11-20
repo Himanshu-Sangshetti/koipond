@@ -1,105 +1,126 @@
 # koipond
 
-A living koi pond for the web. Procedural koi swim through real-looking water: the surface refracts the
-pond floor, caustics drift across the stones, ripples spread and interfere, and light fades into a
-green-blue depth. Move slowly and curious koi come to look; tap the water; double-tap to feed them.
+A living koi pond for the web. Koi swim on their own through real-looking water: ripples spread and
+linger, the surface bends the pond floor, light plays across it, rain falls and sakura drifts down.
+Glide over it and you leave a wake; tap it and it splashes; double-tap and the koi come to feed.
 
-![koipond, lagoon](media/lagoon.jpg)
+![koipond](media/natural.jpg)
 
 ```bash
-npm install koipond
+npm install koipond three
 ```
 
 ```tsx
 import { KoiPond } from "koipond";
 
 export default function Hero() {
-  return (
-    <div style={{ height: "100vh" }}>
-      <KoiPond fish={10} look="lagoon" />
-    </div>
-  );
+  return <KoiPond style={{ height: "100vh" }} />;
 }
 ```
 
-## What you can do with the pond
+That's all it needs. It fills its parent, so give the parent (or the component) a height.
+
+Works with React 18 and 19, Next.js (App Router included, the component is marked `"use client"`), Vite and
+anything else that renders React. `react` and `three` are peer dependencies; nothing else ships.
+
+## What people can do with it
 
 | Do this | And the pond… |
 |---|---|
-| Move the pointer slowly, then stop | bold koi swim over to look, and sometimes nibble at the surface |
-| Move fast near a fish | shy koi dart away |
-| Drag through the water | your pointer leaves a real wake behind it |
-| Tap the water | rings spread, bend everything under them, push petals and lily pads aside |
-| Double-tap (or long-press) | drops food; nearby koi race to it and gulp it down |
-| Nothing at all | koi drift, cruise, rest, rise and sink; the odd drop lands on the surface |
+| Glide the pointer over the water | leaves a wake of small ripples that catches the light |
+| Hold the pointer still near the koi | the bold ones come over to look |
+| Move fast near a fish | the shy ones dart away |
+| Tap | a little crown of droplets jumps up and falls back, and rings spread out |
+| Double-tap or long-press | drops food; nearby koi race over and eat it |
+| Scroll or swipe over it | stirs a current: koi, petals and pads stream with it, then it settles |
 
-![koipond, garden](media/garden.jpg)
+## Looks
+
+| `look` | |
+|---|---|
+| `natural` | clear teal water over a stone floor (default) |
+| `ink` | a woodblock print: indigo water in soft steps, ink outlines, flat colour, paper grain |
+| `garden` | soft grey-sage water over river pebbles, a faded film grade |
+| `violet`, `ember`, `mono` | the same pond through a 4-colour ordered dither |
+
+The look can change at any time; the fish carry on swimming.
 
 ## Props
 
 | Prop | Default | |
 |---|---|---|
-| `fish` | `9` | number of koi |
-| `look` | `"violet"` | `"lagoon"`, `"garden"`, `"natural"`, `"violet"`, `"ink"`, `"ember"`, or your own `Look` |
+| `look` | `"natural"` | one of the looks above, or your own `Look` object |
+| `fish` | `12` | number of koi |
+| `fishSize` | `0.18` | koi length relative to the pond's short side |
+| `pads` | `4` | floating lily pads (some flower) |
+| `petals` | `10` | sakura petals drifting onto the water |
+| `minnows` | `4` | small dark fish |
+| `rain` | `0.4` | `0` to `1` |
 | `water` | | override `{ shallow, deep, caustics, waves, clarity }` on any look |
-| `rain` | `0` | 0..1, drops on the surface |
-| `petals` | `9` | floating blossom petals |
-| `cursor` | `true` | the pointer becomes a droplet that stretches as it moves through the water |
-| `fishSize` | `0.14` | fish length relative to the pond's short side |
-| `pads` | `3` | floating lily pads |
+| `border` | `true` | a small cluster of rocks in one corner |
+| `cursor` | `true` | over the pond the pointer becomes a soft ring (not on touch screens) |
+| `scrollCurrent` | `true` | scroll / swipe stirs the water |
+| `interactive` | `true` | pointer, taps, feeding and scroll |
 | `seed` | `7` | same seed, same pond |
-| `interactive` | `true` | pointer, taps and feeding |
 | `scale` | `1` | simulation resolution relative to the element |
-
-`look` can change at any time; the fish carry on swimming.
-
-### A look of your own
-
-```ts
-const dusk = { mode: "color", palette: ["#000", "#000", "#000", "#000"], deep: "#071a2c", shallow: "#1e4660", tint: "#ffffff", pixel: 1 };
-// or a 4-colour ordered dither:
-const mono = { mode: "dither", palette: ["#0a0a0a", "#333", "#999", "#f5f5f5"], deep: "#050505", shallow: "#1b1b1b", pixel: 2 };
-```
+| `className`, `style` | | passed to the wrapper element |
 
 ### Imperative handle
 
 ```tsx
+import { useRef } from "react";
+import { KoiPond, type KoiPondHandle } from "koipond";
+
 const pond = useRef<KoiPondHandle>(null);
-pond.current?.feed(0.5, 0.5);          // 0..1 coordinates
+// coordinates are 0..1 across the pond
+pond.current?.feed(0.5, 0.5);
 pond.current?.ripple(0.2, 0.7);
-pond.current?.current(0.3, 0);         // push the water; fish and pads drift with it
-pond.current?.formation(slots, flow);  // ask the koi to hold a shape (one slot per fish), null releases
+pond.current?.current(0.4, 0);          // push the water
+pond.current?.formation(slots, flow);   // ask the koi to hold a shape (one slot per fish); null releases
+
+<KoiPond ref={pond} />;
+```
+
+### A look of your own
+
+```ts
+import type { Look } from "koipond";
+
+const dusk: Look = { mode: "color", palette: ["#000", "#000", "#000", "#000"], deep: "#0b2a3c", shallow: "#1e5a64", pixel: 1, caustics: 1.2 };
+const mono: Look = { mode: "dither", palette: ["#0a0a0a", "#333333", "#999999", "#f5f5f5"], deep: "#050505", shallow: "#1b1b1b", pixel: 2 };
 ```
 
 ## How it works
 
-**The fish.** Every koi has a temperament (bold to shy, lazy to restless) that colours each choice. It picks
-an activity (drift, cruise, dart, rest, investigate, feed, flee) by weighted chance from its mood and its
-surroundings. The activity sets a goal heading and speed; neighbours, walls, keep-clear areas and the water
-current bend that goal; the fish turns toward it with limited, speed-dependent agility, like a heavy body.
+**Koi.** Each koi has a temperament (bold to shy, lazy to restless) that shapes every choice. It picks an
+activity (drift, cruise, dart, rest, investigate, feed, flee) by weighted chance from its mood and what is
+around it. The activity sets a goal heading and speed; neighbours, the pond edge, rocks and the water current
+bend that goal; the fish turns toward it with limited, speed-dependent agility, like a heavy body.
 
-**The body.** A chain of joints pulled by the head, with a cap on how sharply each joint can bend, so the
-body flows through turns but can never kink. A muscle wave runs from nose to tail, small at the head and
-strong at the tail, scaled by how hard the fish is working. The tail fin is its own short chain on springs,
-so it trails and flicks after the body.
+**Bodies.** A chain of joints pulled by the head, with a cap on how sharply each joint may bend, so a koi flows
+through a turn but never kinks. A muscle wave runs nose to tail, stronger toward the tail and with effort.
+The tail fin is its own spring-driven chain, so it trails and flicks. Each koi is a lit 3D mesh with its own
+painted markings, scales and translucent fins.
 
-**The water** (WebGL2). A height field on the GPU runs a damped wave equation, so every disturbance spreads,
-reflects and interferes. The surface normal (waves plus fine wind ripples) refracts the procedural pond
-floor and the fish layer. Light is absorbed with depth, red first, which gives the green-blue water, and is
-scattered back from the water body. Caustics play on the floor and lightly on the fish. The surface
-reflects a soft sky by Fresnel and catches sun glints. Lighting runs in linear light with a filmic tone
-curve. Lily pads, petals and food float above it all, unrefracted.
+**Water.** One three.js renderer does everything. A wave equation runs on the GPU in two half-float render
+targets, so every tap, raindrop, gulp and wake spreads, reflects and fades. The surface slope refracts a
+pond floor that is baked once, light gathers on the floor and on every ripple, and colour deepens with depth.
+Lily pads and rocks are lit 3D meshes on top; petals, flowers and splashes are drawn in 2D above them.
 
-**Looks.** `lagoon` is clear shallow sea over pale sand with a bright web of light; `garden` is a soft
-sage pond over river pebbles with water lilies; `natural` is a deeper stone pond; `violet`, `ink` and `ember`
-run the same scene through a 4-colour ordered dither for stylised sites.
+**Calm by default.** Fixed 60 Hz simulation steps; the pond pauses when it is off screen and shows a still
+frame to people who prefer reduced motion.
 
-**Calm by default.** The simulation runs in fixed 60 Hz steps, pauses when the pond is off screen, and
-shows a still pond to people who prefer reduced motion. Without WebGL2 it falls back to a simpler water.
+## Browser support
+
+Any browser with WebGL2 (all current desktop and mobile browsers). Without WebGL2 the component falls back
+to a simpler stylised water.
 
 ## Credits
 
 Inspired by the wider world of procedural koi ponds, including
 [nagomi](https://github.com/msk1039/nagomi). No code is shared; koipond is written from scratch.
+Built on [three.js](https://threejs.org) (MIT).
 
-MIT licensed.
+## License
+
+[MIT](LICENSE)

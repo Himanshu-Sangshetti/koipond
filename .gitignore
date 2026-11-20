@@ -1,2 +1,4 @@
 node_modules
 dist
+*.tgz
+examples/*/node_modules

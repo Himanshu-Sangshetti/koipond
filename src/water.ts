@@ -10,8 +10,7 @@
 //      caustics from the moving surface play on the floor; the surface reflects a soft sky (Fresnel) and
 //      catches sun glints. Floating things (pads) are drawn last, above the water.
 //   4. Optional finishing look: a 4-colour ordered dither, for stylised sites.
-import type { Pond, Ripple } from "./sim";
-import { createFishRenderer } from "./fishgl";
+import type { Ripple } from "./sim";
 
 const VERT = `#version 300 es
 in vec2 p; out vec2 uv; void main(){ uv = p * .5 + .5; gl_Position = vec4(p, 0, 1); }`;
@@ -369,92 +368,4 @@ export const hex = (h: string) => { const n = parseInt(h.replace("#", ""), 16); 
 
 export interface WaterLook { mode: "dither" | "color" | "ink"; palette: [string, string, string, string]; deep: string; shallow: string; tint?: string; pixel: number; bright?: number; floor?: "sand" | "stones" | "pebbles"; caustics?: number; clarity?: number; waves?: number; film?: boolean; absorb?: [number, number, number] }
 
-export const STRENGTH: Record<Ripple["kind"], [number, number]> = { tap: [0.035, 2.2], drop: [0.012, 0.7], nibble: [0.01, 0.5], wake: [0.012, 0.45] }; // radius (of short side), strength
-
-export function createRealWater(canvas: HTMLCanvasElement) {
-  const gl = canvas.getContext("webgl2", { antialias: false, premultipliedAlpha: false, preserveDrawingBuffer: true });
-  if (!gl) return null;
-  const halfFloat = !!gl.getExtension("EXT_color_buffer_float") || !!gl.getExtension("EXT_color_buffer_half_float");
-  if (!halfFloat) return null;
-  const compile = (vs: string, fs: string) => {
-    const mk = (type: number, src: string) => { const s = gl.createShader(type)!; gl.shaderSource(s, src); gl.compileShader(s); if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s) || "shader"); return s; };
-    const p = gl.createProgram()!; gl.attachShader(p, mk(gl.VERTEX_SHADER, vs)); gl.attachShader(p, mk(gl.FRAGMENT_SHADER, fs)); gl.linkProgram(p);
-    if (!gl.getProgramParameter(p, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(p) || "link");
-    return p;
-  };
-  const wave = compile(VERT, WAVE), compose = compile(VERT, COMPOSE);
-  const fishR = createFishRenderer(gl);
-  const quad = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, quad);
-  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW);
-  const vao = gl.createVertexArray(); gl.bindVertexArray(vao);
-  gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
-  gl.bindAttribLocation(wave, 0, "p"); gl.bindAttribLocation(compose, 0, "p"); gl.linkProgram(wave); gl.linkProgram(compose);
-
-  const tex = (w: number, h: number, float: boolean) => {
-    const t = gl.createTexture()!; gl.bindTexture(gl.TEXTURE_2D, t);
-    if (float) gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA16F, w, h, 0, gl.RGBA, gl.HALF_FLOAT, null);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-    return t;
-  };
-  let WW = 0, WH = 0, states: WebGLTexture[] = [], fbos: WebGLFramebuffer[] = [], cur = 0;
-  const sizeWaves = (aspect: number) => {
-    const w = 384, h = Math.max(32, Math.round(384 / aspect));
-    if (w === WW && h === WH) return;
-    WW = w; WH = h;
-    states = [tex(w, h, true), tex(w, h, true)];
-    fbos = states.map((s) => { const f = gl.createFramebuffer()!; gl.bindFramebuffer(gl.FRAMEBUFFER, f); gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, s, 0); gl.clearColor(0, 0, 0, 1); gl.clear(gl.COLOR_BUFFER_BIT); return f; });
-    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-  };
-  const fishTex = tex(1, 1, false), topTex = tex(1, 1, false), fish3dTex = tex(1, 1, false);
-  const injected = new WeakSet<Ripple>();
-  const drops = new Float32Array(64);
-  const U = (p: WebGLProgram, n: string) => gl.getUniformLocation(p, n);
-
-  return {
-    render(fish: HTMLCanvasElement, top: HTMLCanvasElement, pondW: number, pondH: number, ripples: Ripple[], t: number, look: WaterLook, dpr: number, steps = 2, pond?: Pond, fish3d?: HTMLCanvasElement) {
-      if (pond && !fish3d) fishR.render(pond, canvas.width, canvas.height);
-      sizeWaves(pondW / pondH);
-      // new disturbances become drops in the height field
-      let n = 0;
-      const short = Math.min(pondW, pondH);
-      for (const r of ripples) {
-        if (injected.has(r) || r.age < 0 || n >= 16) continue; // (up to 16 new disturbances per frame)
-        injected.add(r);
-        const [rad, str] = STRENGTH[r.kind];
-        drops.set([r.x / pondW, r.y / pondH, (rad * short) / pondW, str * r.power * 0.05], n * 4); n++;
-      }
-      // wave steps (more steps = faster travelling rings)
-      gl.bindVertexArray(vao);
-      gl.useProgram(wave); gl.viewport(0, 0, WW, WH);
-      gl.uniform2f(U(wave, "texel"), 1 / WW, 1 / WH);
-      for (let i = 0; i < steps; i++) {
-        gl.bindFramebuffer(gl.FRAMEBUFFER, fbos[1 - cur]);
-        gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, states[cur]); gl.uniform1i(U(wave, "state"), 0);
-        gl.uniform4fv(U(wave, "drops"), drops); gl.uniform1i(U(wave, "dropN"), i === 0 ? n : 0);
-        gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
-        cur = 1 - cur;
-      }
-      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-      // composite
-      gl.bindVertexArray(vao);
-      gl.useProgram(compose); gl.viewport(0, 0, canvas.width, canvas.height);
-      gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, states[cur]); gl.uniform1i(U(compose, "waves"), 0);
-      gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, fishTex); gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, fish); gl.uniform1i(U(compose, "fish"), 1);
-      gl.activeTexture(gl.TEXTURE3);
-      if (fish3d) { gl.bindTexture(gl.TEXTURE_2D, fish3dTex); gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, fish3d); }
-      else gl.bindTexture(gl.TEXTURE_2D, fishR.texture);
-      gl.uniform1i(U(compose, "fishgl"), 3); gl.uniform1f(U(compose, "useGL"), pond || fish3d ? 1 : 0); gl.uniform1f(U(compose, "fishPremul"), fish3d ? 0 : 1);
-      gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D, topTex); gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, top); gl.uniform1i(U(compose, "top"), 2);
-      gl.uniform2f(U(compose, "res"), canvas.width, canvas.height); gl.uniform2f(U(compose, "pond"), pondW, pondH); gl.uniform2f(U(compose, "wtexel"), 1 / WW, 1 / WH);
-      gl.uniform1f(U(compose, "t"), t); gl.uniform1f(U(compose, "px"), Math.max(1, look.pixel * dpr)); gl.uniform1f(U(compose, "mode"), look.mode === "dither" ? 0 : look.mode === "ink" ? 2 : 1);
-      gl.uniform1f(U(compose, "bright"), look.bright ?? 1);
-      gl.uniform1f(U(compose, "sand"), look.floor === "pebbles" ? 2 : look.floor === "sand" ? 1 : 0); gl.uniform1f(U(compose, "causticAmt"), look.caustics ?? 1);
-      gl.uniform1f(U(compose, "clarity"), look.clarity ?? 1); gl.uniform1f(U(compose, "film"), look.film ? 1 : 0);
-      gl.uniform3fv(U(compose, "absorbK"), look.absorb ?? [2.4, 0.92, 0.78]); gl.uniform1f(U(compose, "waveAmt"), look.waves ?? 1);
-      gl.uniform3fv(U(compose, "waterDeep"), hex(look.deep)); gl.uniform3fv(U(compose, "waterShallow"), hex(look.shallow)); gl.uniform3fv(U(compose, "tint"), hex(look.tint ?? "#ffffff"));
-      look.palette.forEach((c, i) => gl.uniform3fv(U(compose, `c${i}`), hex(c)));
-      gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
-    },
-  };
-}
+export const STRENGTH: Record<Ripple["kind"], [number, number]> = { tap: [0.03, 1.4], drop: [0.012, 0.7], nibble: [0.01, 0.5], wake: [0.012, 0.45] }; // radius (of short side), strength

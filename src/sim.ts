@@ -58,7 +58,7 @@ export interface Fish {
 }
 
 export interface Bubble { x: number; y: number; r: number; age: number; life: number }
-export interface Spark { x: number; y: number; vx: number; vy: number; age: number; life: number; r: number }
+export interface Spark { x: number; y: number; vx: number; vy: number; age: number; life: number; r: number; drip?: boolean }
 export interface Pellet { x: number; y: number; vx: number; vy: number; age: number; eaten: boolean }
 export interface Ripple { x: number; y: number; age: number; power: number; kind: "tap" | "drop" | "nibble" | "wake" }
 export interface Pad { x: number; y: number; r: number; spin: number; angle: number; vx: number; vy: number; notch: number; tone: number; flower: boolean }
@@ -173,7 +173,7 @@ export class Pond {
   /** A tap lands: a crown of droplets thrown out, a brief flash, and the ring. */
   splash(x: number, y: number) {
     const u = this.unit;
-    for (let i = 0; i < 46; i++) { const a = this.rnd.between(0, TAU), sp = u * this.rnd.between(0.6, 2.2); this.sparks.push({ x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, age: -this.rnd.between(0, 0.05), life: this.rnd.between(0.35, 0.8), r: u * this.rnd.between(0.012, 0.03) }); }
+    for (let i = 0; i < 14; i++) { const a = (i / 14) * TAU + this.rnd.between(-0.2, 0.2), sp = u * this.rnd.between(0.5, 1.1); this.sparks.push({ x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, age: -this.rnd.between(0, 0.04), life: this.rnd.between(0.32, 0.5), r: u * this.rnd.between(0.014, 0.022), drip: true }); }
     this.flashes.push({ x, y, age: 0 });
     if (this.sparks.length > 400) this.sparks.splice(0, this.sparks.length - 400);
     this.ripple(x, y, "tap", 1);
@@ -278,9 +278,10 @@ export class Pond {
     for (const b of this.bubbles) { b.age += dt; b.x += this.current.x * u * 0.2 * dt; b.y += this.current.y * u * 0.2 * dt; if (b.age > b.life) this.ripple(b.x, b.y, "nibble", 0.25); }
     this.bubbles = this.bubbles.filter((b) => b.age <= b.life).slice(-60);
     for (const sp of this.sparks) { sp.age += dt; if (sp.age > 0) { sp.x += sp.vx * dt; sp.y += sp.vy * dt; sp.vx *= Math.exp(-dt * 3); sp.vy *= Math.exp(-dt * 3); } }
+    for (const sp of this.sparks) if (sp.drip && sp.age >= sp.life) this.ripple(sp.x, sp.y, "nibble", 0.35);
     this.sparks = this.sparks.filter((sp) => sp.age < sp.life);
     for (const fl of this.flashes) fl.age += dt;
-    this.flashes = this.flashes.filter((fl) => fl.age < 0.5);
+    this.flashes = this.flashes.filter((fl) => fl.age < 0.3);
     for (const r of this.ripples) r.age += dt;
     this.ripples = this.ripples.filter((r) => r.age < (r.kind === "tap" ? 2.6 : r.kind === "drop" ? 1.6 : 1.0));
 

@@ -10,14 +10,13 @@ import { forwardRef, useEffect, useImperativeHandle, useRef } from "react";
 import { drawScene, drawTop, drawUnder, stonesFor } from "./draw";
 import { createProps3D } from "./props3d";
 import { createWater, type Look } from "./gl";
-import { createRealWater } from "./water";
 import { createStage } from "./stage";
 import { createFish3D } from "./fish3d";
 import { Pond, type V } from "./sim";
 
 export const LOOKS: Record<string, Look> = {
   ink: { mode: "ink", palette: ["#000", "#000", "#000", "#000"], deep: "#283850", shallow: "#80998c", tint: "#ffffff", pixel: 1, floor: "pebbles", caustics: 1, clarity: 1, waves: 1 },
-  garden: { mode: "color", palette: ["#000", "#000", "#000", "#000"], deep: "#46544b", shallow: "#7f9c86", tint: "#ffffff", pixel: 1, floor: "pebbles", caustics: .4, clarity: .55, waves: .8, bright: .78, film: true, absorb: [1.25, .78, 1.15] },
+  garden: { mode: "color", palette: ["#000", "#000", "#000", "#000"], deep: "#4a5552", shallow: "#8a9a91", tint: "#ffffff", pixel: 1, floor: "pebbles", caustics: .45, clarity: .6, waves: .8, bright: .8, film: true, absorb: [1.1, .95, 1.02] },
   lagoon: { mode: "color", palette: ["#000", "#000", "#000", "#000"], deep: "#08758c", shallow: "#25b8b4", tint: "#ffffff", pixel: 1, floor: "sand", caustics: 1.2, clarity: 1.0, waves: 1.3, bright: .85 },
   violet: { mode: "dither", palette: ["#09080f", "#2a2160", "#6c5ce7", "#e4dfff"], deep: "#05040a", shallow: "#15122a", pixel: 2 },
   mono: { mode: "dither", palette: ["#0c0c0c", "#3a3a3a", "#9a9a9a", "#f2f0ea"], deep: "#050505", shallow: "#1b1b1b", pixel: 2 },
@@ -36,24 +35,31 @@ export interface KoiPondHandle {
 }
 
 export interface KoiPondProps {
+  /** Number of koi. */
   fish?: number;
+  /** Art style: "natural", "ink", "garden", "violet", "ember", "mono", or your own Look. Can change live. */
   look?: keyof typeof LOOKS | Look;
   /** Fish size relative to the short side of the pond. */
   fishSize?: number;
+  /** Floating lily pads (some flower). */
   pads?: number;
+  /** Sakura petals drifting down onto the water. */
   petals?: number;
+  /** Small dark fish darting between the koi. */
   minnows?: number;
+  /** Same seed, same pond. */
   seed?: number;
+  /** Pointer, taps, feeding and scroll. */
   interactive?: boolean;
   /** 0..1 rain on the surface. */
   rain?: number;
   /** Override parts of the look: water colours, light (caustics), waves. */
   water?: { shallow?: string; deep?: string; caustics?: number; waves?: number; clarity?: number };
-  /** A rim of stones around the pond (true) or open water to the edges (false). */
+  /** A small cluster of rocks in the lower-left corner. */
   border?: boolean;
   /** Scrolling (wheel or swipe) over the pond pushes the water: fish, petals and pads stream with it. */
   scrollCurrent?: boolean;
-  /** Replace the pointer over the pond with a droplet that stretches as it moves through the water. */
+  /** Over the pond, the pointer becomes a soft ring with a dot (hidden on touch screens). */
   cursor?: boolean;
   /** Resolution of the simulation relative to the element (lower = chunkier, faster). */
   scale?: number;
@@ -62,7 +68,7 @@ export interface KoiPondProps {
 }
 
 export const KoiPond = forwardRef<KoiPondHandle, KoiPondProps>(function KoiPond(
-  { fish = 9, look = "violet", fishSize = 0.14, pads = 3, petals = 9, minnows = 0, seed = 7, interactive = true, scale = 1, rain = 0, water, cursor = true, scrollCurrent = true, border = true, className, style }, ref,
+  { fish = 12, look = "natural", fishSize = 0.18, pads = 4, petals = 10, minnows = 4, seed = 7, interactive = true, scale = 1, rain = 0.4, water, cursor = true, scrollCurrent = true, border = true, className, style }, ref,
 ) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const pondRef = useRef<Pond | null>(null);
@@ -94,7 +100,6 @@ export const KoiPond = forwardRef<KoiPondHandle, KoiPondProps>(function KoiPond(
     // everything on one shared three.js renderer (no copies between GPU contexts)
     let stage: ReturnType<typeof createStage> | null = null;
     try { stage = createStage(canvas); } catch (e) { console.warn("koipond: WebGL2 stage unavailable", e); }
-    const real: ReturnType<typeof createRealWater> = null; void createRealWater;
     const water = stage ? null : createWater(canvas);
     if (!stage && !water) return;
     const topLayer = document.createElement("canvas"), tctx = topLayer.getContext("2d")!;
@@ -120,7 +125,7 @@ export const KoiPond = forwardRef<KoiPondHandle, KoiPondProps>(function KoiPond(
     // pointer → pond coordinates
     const toPond = (e: PointerEvent | MouseEvent) => { const r = canvas.getBoundingClientRect(); return { x: ((e.clientX - r.left) / r.width) * pond!.w, y: ((e.clientY - r.top) / r.height) * pond!.h, inside: e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom }; };
     let press = 0, pressAt = { x: 0, y: 0 }, lastTap = 0;
-    const drop = { x: 0, y: 0, vx: 0, vy: 0, tx: 0, ty: 0, shown: false, down: false };
+    const drop: { x: number; y: number; vx: number; vy: number; tx: number; ty: number; shown: boolean; down: boolean; s?: number } = { x: 0, y: 0, vx: 0, vy: 0, tx: 0, ty: 0, shown: false, down: false };
     const onMove = (e: PointerEvent) => {
       if (!pond) return; const p = toPond(e); pond.setPointer(p.x, p.y, p.inside);
       const r = canvas.getBoundingClientRect(); drop.tx = e.clientX - r.left; drop.ty = e.clientY - r.top; drop.shown = p.inside && e.pointerType !== "touch";
@@ -154,11 +159,14 @@ export const KoiPond = forwardRef<KoiPondHandle, KoiPondProps>(function KoiPond(
       const el = dropRef.current;
       if (el) {
         // a ring that trails the pointer and lies flat on the water, with a small dot at the exact point
-        drop.x += (drop.tx - drop.x) * 0.16; drop.y += (drop.ty - drop.y) * 0.16;
+        const ease = 1 - Math.exp(-dt * 14);
+        drop.x += (drop.tx - drop.x) * ease; drop.y += (drop.ty - drop.y) * ease;
         el.style.opacity = drop.shown ? "1" : "0";
-        const sc = drop.down ? 1.35 : 1;
+        drop.s = (drop.s ?? 1) + ((drop.down ? 0.72 : 1) - (drop.s ?? 1)) * (1 - Math.exp(-dt * 18));
+        const sc = drop.s;
         el.style.transform = `translate(${drop.x}px, ${drop.y}px) translate(-50%, -50%) scale(${sc})`;
         if (dotRef.current) { dotRef.current.style.opacity = drop.shown ? "1" : "0"; dotRef.current.style.transform = `translate(${drop.tx}px, ${drop.ty}px) translate(-50%, -50%)`; }
+        el.style.willChange = "transform";
       }
       const fl = Math.hypot(flow.x, flow.y); if (fl > 1.6) { flow.x *= 1.6 / fl; flow.y *= 1.6 / fl; }
       flow.x *= Math.exp(-dt * 1.4); flow.y *= Math.exp(-dt * 1.4);
@@ -192,7 +200,7 @@ export const KoiPond = forwardRef<KoiPondHandle, KoiPondProps>(function KoiPond(
       <canvas ref={canvasRef} style={{ display: "block", width: "100%", height: "100%", touchAction: "manipulation", cursor: cursor && interactive ? "none" : undefined }} />
       {cursor && interactive && (
         <>
-          <div ref={dropRef} aria-hidden style={{ position: "absolute", left: 0, top: 0, width: 30, height: 30, borderRadius: "50%", pointerEvents: "none", opacity: 0, transition: "opacity .3s", border: "1px solid rgba(255,255,255,.6)", boxShadow: "0 0 12px rgba(255,255,255,.12)" }} />
+          <div ref={dropRef} aria-hidden style={{ position: "absolute", left: 0, top: 0, width: 30, height: 30, borderRadius: "50%", pointerEvents: "none", opacity: 0, transition: "opacity .3s", border: "1.5px solid rgba(255,255,255,.7)", willChange: "transform", boxShadow: "0 0 12px rgba(255,255,255,.12)" }} />
           <div ref={dotRef} aria-hidden style={{ position: "absolute", left: 0, top: 0, width: 5, height: 5, borderRadius: "50%", pointerEvents: "none", opacity: 0, transition: "opacity .3s", background: "rgba(255,255,255,.95)", boxShadow: "0 0 6px rgba(255,255,255,.6)" }} />
         </>
       )}

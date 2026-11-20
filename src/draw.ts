@@ -195,8 +195,12 @@ export function drawTop(ctx: CanvasRenderingContext2D, pond: Pond, props?: HTMLC
     ctx.stroke();
   }
   // splash droplets and wake sparks: small points of light, fading
-  for (const sp of pond.sparks) { if (sp.age < 0) continue; const k = 1 - sp.age / sp.life; ctx.fillStyle = `rgba(245,255,250,${0.85 * k})`; ctx.beginPath(); ctx.arc(sp.x, sp.y, sp.r * (0.6 + k * 0.6), 0, TAU); ctx.fill(); }
-  for (const fl of pond.flashes) { const k = 1 - fl.age / 0.5, R = unit * (0.25 + fl.age * 0.8); const g = ctx.createRadialGradient(fl.x, fl.y, 0, fl.x, fl.y, R); g.addColorStop(0, `rgba(255,255,255,${0.55 * k})`); g.addColorStop(1, "rgba(255,255,255,0)"); ctx.fillStyle = g; ctx.beginPath(); ctx.arc(fl.x, fl.y, R, 0, TAU); ctx.fill(); }
+  for (const sp of pond.sparks) {
+    if (sp.age < 0) continue; const k = sp.age / sp.life, arc = sp.drip ? Math.sin(k * Math.PI) : 1 - k;
+    ctx.fillStyle = `rgba(240,250,248,${(sp.drip ? 0.75 : 0.6) * (sp.drip ? 0.4 + 0.6 * arc : arc)})`;
+    ctx.beginPath(); ctx.arc(sp.x, sp.y - (sp.drip ? arc * unit * 0.08 : 0), sp.r * (sp.drip ? 0.7 + arc * 0.7 : 0.6 + arc * 0.5), 0, TAU); ctx.fill();
+  }
+  for (const fl of pond.flashes) { const k = 1 - fl.age / 0.3, R = unit * (0.12 + fl.age * 0.6); const g = ctx.createRadialGradient(fl.x, fl.y, 0, fl.x, fl.y, R); g.addColorStop(0, `rgba(255,255,255,${0.3 * k})`); g.addColorStop(1, "rgba(255,255,255,0)"); ctx.fillStyle = g; ctx.beginPath(); ctx.arc(fl.x, fl.y, R, 0, TAU); ctx.fill(); }
   for (const b of pond.bubbles) {
     if (b.age < 0) continue;
     const k = Math.min(1, b.age / 0.3), r = b.r * (0.6 + 0.4 * k);

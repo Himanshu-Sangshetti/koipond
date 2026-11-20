@@ -292,7 +292,10 @@ void main(){
     fq *= fl0 < dot(fq, vec3(.299, .587, .114)) * .72 ? .8 : 1.;
     float aN = 0., aX = 1.;
     for (int k = 0; k < 4; k++){ vec2 o = vec2(k == 0 ? 1. : k == 1 ? -1. : 0., k == 2 ? 1. : k == 3 ? -1. : 0.) * px2; float a2 = texture(fishgl, clamp(st + refrFish + o, vec2(.001), vec2(.999))).a; aN = max(aN, a2); aX = min(aX, a2); }
-    vec3 ic = mix(wc, fq, step(.5, fk.a));
+    // fins are thinner than the body (part alpha): a pale membrane, then the solid body on top
+    float finM = smoothstep(.12, .3, fk.a) * (1. - step(.75, fk.a));
+    vec3 ic = mix(wc, mix(wc, CREAM, .62), finM);
+    ic = mix(ic, fq, step(.75, fk.a));
     ic = mix(ic, INK, smoothstep(.3, .6, aN - aX));
     // floating things: pads and petals posterised, outlined
     float tN = 0., tX = 1.;

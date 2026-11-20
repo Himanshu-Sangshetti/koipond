@@ -140,7 +140,7 @@ export function createFish3D() {
       clearcoat: 0.3, clearcoatRoughness: 0.4, side: THREE.DoubleSide,
     });
     const body = new THREE.Mesh(geo, mat); scene.add(body);
-    const finMat = new THREE.MeshBasicMaterial({ map: fins(), color: new THREE.Color(f.variety.fin).lerp(new THREE.Color("#dfe8e4"), 0.4), transparent: true, opacity: 0.45, side: THREE.DoubleSide, depthWrite: false, premultipliedAlpha: true });
+    const finMat = new THREE.MeshBasicMaterial({ map: fins(), color: new THREE.Color(f.variety.fin).lerp(new THREE.Color("#f3eee4"), 0.25), transparent: true, opacity: 0.68, side: THREE.DoubleSide, depthWrite: false, premultipliedAlpha: true });
     const fms: THREE.Mesh[] = [];
     for (let k = 0; k < 4; k++) { const m = new THREE.Mesh(strip(8), finMat); scene.add(m); fms.push(m); }
     const dorsal = new THREE.Mesh(strip(10), finMat); scene.add(dorsal); fms.push(dorsal);
@@ -177,7 +177,7 @@ export function createFish3D() {
         }
         pos.needsUpdate = true; k.body.geometry.computeVertexNormals();
         k.mat.color.copy(new THREE.Color(1, 1, 1).lerp(water, f.depth * 0.18));
-        k.finMat.opacity = 0.45 - f.depth * 0.15;
+        k.finMat.opacity = 0.68 - f.depth * 0.15;
         // pectoral and pelvic fins: membranes swept back from the body, paddling gently
         const paddle = 0.85 + 0.2 * Math.sin(f.finPhase * 2.2);
         let fi = 0;

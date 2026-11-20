@@ -47,6 +47,8 @@ export interface KoiPondProps {
   rain?: number;
   /** Override parts of the look: water colours, light (caustics), waves. */
   water?: { shallow?: string; deep?: string; caustics?: number; waves?: number; clarity?: number };
+  /** A rim of stones around the pond (true) or open water to the edges (false). */
+  border?: boolean;
   /** Scrolling (wheel or swipe) over the pond pushes the water: fish, petals and pads stream with it. */
   scrollCurrent?: boolean;
   /** Replace the pointer over the pond with a droplet that stretches as it moves through the water. */
@@ -58,7 +60,7 @@ export interface KoiPondProps {
 }
 
 export const KoiPond = forwardRef<KoiPondHandle, KoiPondProps>(function KoiPond(
-  { fish = 9, look = "violet", fishSize = 0.14, pads = 3, petals = 9, minnows = 0, seed = 7, interactive = true, scale = 1, rain = 0, water, cursor = true, scrollCurrent = true, className, style }, ref,
+  { fish = 9, look = "violet", fishSize = 0.14, pads = 3, petals = 9, minnows = 0, seed = 7, interactive = true, scale = 1, rain = 0, water, cursor = true, scrollCurrent = true, border = true, className, style }, ref,
 ) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const pondRef = useRef<Pond | null>(null);
@@ -68,6 +70,9 @@ export const KoiPond = forwardRef<KoiPondHandle, KoiPondProps>(function KoiPond(
   const base = typeof look === "string" ? LOOKS[look] ?? LOOKS.violet : look;
   themeRef.current = water ? { ...base, ...Object.fromEntries(Object.entries(water).filter(([, v]) => v !== undefined)) } : base;
   if (pondRef.current) pondRef.current.rain = rain;
+  const styleName = typeof look === "string" ? look : "natural";
+  const styleRef = useRef(styleName); styleRef.current = styleName;
+  const borderRef = useRef(border); borderRef.current = border;
   const rainRef = useRef(rain); rainRef.current = rain;
   const dropRef = useRef<HTMLDivElement>(null);
   const dotRef = useRef<HTMLDivElement>(null);
@@ -153,6 +158,7 @@ export const KoiPond = forwardRef<KoiPondHandle, KoiPondProps>(function KoiPond(
       const fl = Math.hypot(flow.x, flow.y); if (fl > 1.6) { flow.x *= 1.6 / fl; flow.y *= 1.6 / fl; }
       flow.x *= Math.exp(-dt * 1.4); flow.y *= Math.exp(-dt * 1.4);
       if (scrollCurrent) pond.current = { x: flow.x, y: flow.y };
+      pond.style = styleRef.current; pond.border = borderRef.current ? Math.min(pond.w, pond.h) * 0.06 : 0;
       while (acc >= 1 / 60) { pond.step(1 / 60); acc -= 1 / 60; }
       if (real) { drawUnder(sctx, pond, 0.8, false); drawTop(tctx, pond); fish3d?.render(pond, canvas.width, canvas.height); real.render(scene, topLayer, pond.w, pond.h, pond.ripples, pond.t, themeRef.current, dpr, 2, pond, fish3d?.canvas); }
       else { drawScene(sctx, pond); water!.render(scene, pond.w, pond.h, pond.ripples, pond.t, themeRef.current, dpr); }

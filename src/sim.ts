@@ -84,6 +84,17 @@ export class Pond {
   fish: Fish[] = []; bubbles: Bubble[] = []; pellets: Pellet[] = []; ripples: Ripple[] = []; pads: Pad[] = []; petals: Petal[] = []; weeds: Weed[] = [];
   private petalMax = 0; private nextPetal = 0;
   current: V = { x: 0, y: 0 };
+  /** Width of the stone border around the pond (pond pixels); 0 = no border. */
+  border = 0;
+  /** How far a point is toward the shore: 0 at the centre, 1 on the water line (pond shape = rounded, slightly irregular). */
+  shore(x: number, y: number) {
+    if (this.border <= 0) return 0;
+    const a = this.w / 2 - this.border * 1.1, b = this.h / 2 - this.border * 1.1, dx = (x - this.w / 2) / a, dy = (y - this.h / 2) / b;
+    const ang = Math.atan2(dy, dx), wob = 1 + 0.035 * Math.sin(ang * 3 + 1.3) + 0.025 * Math.sin(ang * 5 + 0.4);
+    return Math.pow(Math.pow(Math.abs(dx), 3.2) + Math.pow(Math.abs(dy), 3.2), 1 / 3.2) / wob;
+  }
+  /** Which art style the pond is drawn in (drawing reads this for its colours). */
+  style = "natural";
   /** 0..1: how hard it is raining. */
   rain = 0;
   private lastWake: V = { x: -1e9, y: -1e9 };
@@ -256,6 +267,8 @@ export class Pond {
       p.x += p.vx * dt + Math.sin(this.t * 0.1 + p.angle) * u * 0.02 * dt; p.y += p.vy * dt + Math.cos(this.t * 0.08 + p.angle) * u * 0.02 * dt;
       p.angle += p.spin * dt;
       const m = p.r; if (p.x < -m) p.x = this.w + m; if (p.x > this.w + m) p.x = -m; if (p.y < -m) p.y = this.h + m; if (p.y > this.h + m) p.y = -m;
+      if (this.border > 0 && !((p as unknown as { z?: number }).z! > 0) && this.shore(p.x, p.y) > 0.9) { const cx = this.w / 2 - p.x, cy = this.h / 2 - p.y, d = len(cx, cy) || 1; p.vx = cx / d * this.unit * 0.15; p.vy = cy / d * this.unit * 0.15; p.x += cx / d * 1.5; p.y += cy / d * 1.5; }
+      if (false) { const b = this.border + p.r; if (p.x < b) { p.x = b; p.vx = Math.abs(p.vx); } if (p.x > this.w - b) { p.x = this.w - b; p.vx = -Math.abs(p.vx); } if (p.y < b) { p.y = b; p.vy = Math.abs(p.vy); } if (p.y > this.h - b) { p.y = this.h - b; p.vy = -Math.abs(p.vy); } }
     }
 
     // sakura: every so often a petal drifts down from above and settles on the water
@@ -276,6 +289,8 @@ export class Pond {
       p.vy += (this.current.y * u * 1.4 + Math.cos(this.t * 0.11 + p.r) * u * 0.03 - p.vy) * dt * 0.5;
       p.x += p.vx * dt; p.y += p.vy * dt; p.angle += p.spin * dt; p.spin *= Math.exp(-dt * 0.6);
       const m = p.r * 2; if (p.x < -m) p.x = this.w + m; if (p.x > this.w + m) p.x = -m; if (p.y < -m) p.y = this.h + m; if (p.y > this.h + m) p.y = -m;
+      if (this.border > 0 && !((p as unknown as { z?: number }).z! > 0) && this.shore(p.x, p.y) > 0.9) { const cx = this.w / 2 - p.x, cy = this.h / 2 - p.y, d = len(cx, cy) || 1; p.vx = cx / d * this.unit * 0.15; p.vy = cy / d * this.unit * 0.15; p.x += cx / d * 1.5; p.y += cy / d * 1.5; }
+      if (false) { const b = this.border + p.r; if (p.x < b) { p.x = b; p.vx = Math.abs(p.vx); } if (p.x > this.w - b) { p.x = this.w - b; p.vx = -Math.abs(p.vx); } if (p.y < b) { p.y = b; p.vy = Math.abs(p.vy); } if (p.y > this.h - b) { p.y = this.h - b; p.vy = -Math.abs(p.vy); } }
     }
     const fm = this.formation;
     this.fish.forEach((f, idx) => {
@@ -323,8 +338,9 @@ export class Pond {
         }
         if (!slot && f.activity !== "flee") { const d = len(o.x - f.x, o.y - f.y); if (d < u * 2.2) { const k = (1 - d / (u * 2.2)) * 0.18; ax += Math.cos(o.heading) * k; ay += Math.sin(o.heading) * k; } }
       }
-      const look = f.length * (0.8 + f.speed / (u * 2)), lx = f.x + Math.cos(f.heading) * look, ly = f.y + Math.sin(f.heading) * look, m = u * 0.45;
-      if (lx < m) ax += (m - lx) / m * 2.5; if (lx > this.w - m) ax -= (lx - (this.w - m)) / m * 2.5;
+      const look = f.length * (0.8 + f.speed / (u * 2)), lx = f.x + Math.cos(f.heading) * look, ly = f.y + Math.sin(f.heading) * look, m = u * 0.45 + this.border;
+      if (this.border > 0) { const v = this.shore(lx, ly); if (v > 0.82) { const cx = this.w / 2 - f.x, cy = this.h / 2 - f.y, d = len(cx, cy) || 1, k = (v - 0.82) * 14; ax += cx / d * k; ay += cy / d * k; } }
+      else if (lx < m) ax += (m - lx) / m * 2.5; if (lx > this.w - m) ax -= (lx - (this.w - m)) / m * 2.5;
       if (ly < m) ay += (m - ly) / m * 2.5; if (ly > this.h - m) ay -= (ly - (this.h - m)) / m * 2.5;
       if (!slot) for (const z of this.keepClear) {
         if (lx > z.x && lx < z.x + z.w && ly > z.y && ly < z.y + z.h) { const cx = z.x + z.w / 2, cy = z.y + z.h / 2, dx = f.x - cx, dy = (f.y - cy) * (z.w / Math.max(1, z.h)), d = len(dx, dy) || 1; ax += dx / d * 1.4; ay += dy / d * 1.4; }

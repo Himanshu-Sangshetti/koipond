@@ -182,7 +182,7 @@ export function drawTop(ctx: CanvasRenderingContext2D, pond: Pond) {
     // a sakura petal: pale pink, deeper at the base; larger and softer while still falling
     const r = p.r * (1 + p.z * 0.6), cx = Math.cos(p.angle), cy = Math.sin(p.angle);
     const grd = ctx.createLinearGradient(p.x - cx * r, p.y - cy * r, p.x + cx * r, p.y + cy * r);
-    grd.addColorStop(0, "#e7a3b3"); grd.addColorStop(1, "#fcecef");
+    grd.addColorStop(0, scheme(pond).petal[0]); grd.addColorStop(1, scheme(pond).petal[1]);
     ctx.globalAlpha = p.z > 0 ? 0.92 : 1; ctx.fillStyle = grd; petalPath(ctx, p.x, p.y, r, p.angle); ctx.fill(); ctx.globalAlpha = 1;
   }
   // rain: faint streaks of falling drops
@@ -200,13 +200,24 @@ export function drawTop(ctx: CanvasRenderingContext2D, pond: Pond) {
     ctx.beginPath(); ctx.arc(b.x, b.y, r, 0, TAU); ctx.stroke();
     ctx.fillStyle = `rgba(255,255,255,${0.7 * k})`; ctx.beginPath(); ctx.arc(b.x - r * 0.35, b.y - r * 0.35, r * 0.25, 0, TAU); ctx.fill();
   }
-  for (const p of pond.pads) drawPad(ctx, p);
+  for (const p of pond.pads) drawPad(ctx, p, scheme(pond));
+  if (pond.border > 0) drawBorder(ctx, pond, scheme(pond));
 }
 
-const PAD_TONES = [["#8c8f52", "#6b6e36", "#4b4d22"], ["#b3aa6b", "#9a9250", "#746c34"], ["#a88466", "#8c6a4e", "#654a36"]] as const;
+// colours for floating things and the border, per art style, so they sit in the same world as the water
+type Scheme = { pads: string[][]; vein: string; petal: [string, string]; lily: [string, string]; heart: [string, string]; stone: string[]; stoneDark: string; moss: string };
+const SCHEMES: Record<string, Scheme> = {
+  // woodblock print: sage/olive greens, pale sakura, cream lilies, slate and cream stones
+  ink: { pads: [["#7f8d5c", "#66744a", "#4c5838"], ["#98a06a", "#7f8955", "#606a3f"], ["#6c7a55", "#566444", "#3f4a32"]], vein: "rgba(232,226,200,0.5)", petal: ["#e3aab3", "#f6e2e2"], lily: ["#efe8d6", "#fbf7ee"], heart: ["#e9b648", "#cf8f2c"], stone: ["#8e958f", "#a3a79c", "#767e7c", "#b6b3a4"], stoneDark: "#3a4250", moss: "#5f6d45" },
+  // soft garden photo: dusty olive, khaki and rose pads (from the reference), muted sakura
+  garden: { pads: [["#8c8f52", "#6b6e36", "#4b4d22"], ["#b3aa6b", "#9a9250", "#746c34"], ["#a88466", "#8c6a4e", "#654a36"]], vein: "rgba(235,228,190,0.5)", petal: ["#d9a4ad", "#f1dcdc"], lily: ["#f0e9da", "#fffaf0"], heart: ["#f0c45a", "#d99a2a"], stone: ["#8d8c80", "#a4a094", "#77786e", "#b5b0a0"], stoneDark: "#3e4038", moss: "#6b7246" },
+  // deep stone pond: cool greens, pale petals
+  natural: { pads: [["#4f7a52", "#3a6040", "#284430"], ["#6a8a56", "#527044", "#3a5232"], ["#5a6e4a", "#46583a", "#33402b"]], vein: "rgba(205,225,190,0.45)", petal: ["#dba6b2", "#f5e4e8"], lily: ["#eee9df", "#fbf9f4"], heart: ["#f0c45a", "#d99a2a"], stone: ["#6f7672", "#858a83", "#5d6462", "#9a9a90"], stoneDark: "#26302e", moss: "#4c6a44" },
+};
+const scheme = (p: Pond) => SCHEMES[p.style] ?? SCHEMES.natural;
 
-function drawPad(ctx: CanvasRenderingContext2D, p: Pond["pads"][number]) {
-  const tone = PAD_TONES[p.tone < 0.45 ? 0 : p.tone < 0.75 ? 1 : 2];
+function drawPad(ctx: CanvasRenderingContext2D, p: Pond["pads"][number], sc: Scheme) {
+  const tone = sc.pads[p.tone < 0.45 ? 0 : p.tone < 0.75 ? 1 : 2];
   // leaf body: lit toward the upper left, darker at the edge
   const grd = ctx.createRadialGradient(p.x - p.r * 0.25, p.y - p.r * 0.3, p.r * 0.05, p.x, p.y, p.r * 1.02);
   grd.addColorStop(0, tone[0]); grd.addColorStop(0.7, tone[1]); grd.addColorStop(1, tone[2]);
@@ -217,7 +228,7 @@ function drawPad(ctx: CanvasRenderingContext2D, p: Pond["pads"][number]) {
   for (let i = 0; i <= n; i++) {
     const a = p.angle + p.notch * 0.5 + (i / n) * (TAU - p.notch), bend = 0.12 * Math.sin(i * 1.7);
     const g2 = ctx.createLinearGradient(p.x, p.y, p.x + Math.cos(a) * p.r, p.y + Math.sin(a) * p.r);
-    g2.addColorStop(0, "rgba(235,228,190,0.5)"); g2.addColorStop(1, "rgba(235,228,190,0.08)");
+    g2.addColorStop(0, sc.vein); g2.addColorStop(1, "rgba(0,0,0,0)");
     ctx.strokeStyle = g2; ctx.lineWidth = Math.max(0.4, p.r * 0.018);
     ctx.beginPath(); ctx.moveTo(p.x, p.y);
     ctx.quadraticCurveTo(p.x + Math.cos(a + bend) * p.r * 0.5, p.y + Math.sin(a + bend) * p.r * 0.5, p.x + Math.cos(a) * p.r * 0.97, p.y + Math.sin(a) * p.r * 0.97); ctx.stroke();
@@ -226,11 +237,11 @@ function drawPad(ctx: CanvasRenderingContext2D, p: Pond["pads"][number]) {
   ctx.strokeStyle = "rgba(60,55,25,0.35)"; ctx.lineWidth = Math.max(0.6, p.r * 0.04); padPath(ctx, p.x, p.y, p.r * 0.985, p.angle, p.notch); ctx.stroke();
   ctx.fillStyle = "rgba(255,255,255,0.06)"; ctx.beginPath(); ctx.ellipse(p.x - p.r * 0.32, p.y - p.r * 0.36, p.r * 0.4, p.r * 0.2, -0.6, 0, TAU); ctx.fill();
   ctx.restore();
-  if (p.flower) drawLily(ctx, p.x + Math.cos(p.angle + Math.PI) * p.r * 0.15, p.y + Math.sin(p.angle + Math.PI) * p.r * 0.15, p.r * 0.48, p.angle * 3);
+  if (p.flower) drawLily(ctx, p.x + Math.cos(p.angle + Math.PI) * p.r * 0.15, p.y + Math.sin(p.angle + Math.PI) * p.r * 0.15, p.r * 0.48, p.angle * 3, sc);
 }
 
 /** A white water lily seen from above: two rings of pointed petals around a golden centre. */
-function drawLily(ctx: CanvasRenderingContext2D, x: number, y: number, r: number, rot: number) {
+function drawLily(ctx: CanvasRenderingContext2D, x: number, y: number, r: number, rot: number, sc: Scheme) {
   ctx.save();
   ctx.shadowColor = "rgba(0,30,20,0.35)"; ctx.shadowBlur = r * 0.35; ctx.shadowOffsetX = r * 0.08; ctx.shadowOffsetY = r * 0.14;
   for (const [ring, count, len, wid, off] of [[0, 10, 1, 0.3, 0], [1, 9, 0.78, 0.26, 0.5]] as const) {
@@ -238,7 +249,7 @@ function drawLily(ctx: CanvasRenderingContext2D, x: number, y: number, r: number
       const a = rot + ((i + off) / count) * TAU, L = r * len, W = r * wid;
       const tx = x + Math.cos(a) * L, ty = y + Math.sin(a) * L, nx = -Math.sin(a) * W, ny = Math.cos(a) * W;
       const g = ctx.createLinearGradient(x, y, tx, ty);
-      g.addColorStop(0, ring ? "#fff6dc" : "#f3ecd6"); g.addColorStop(1, ring ? "#ffffff" : "#fbf8f1");
+      g.addColorStop(0, sc.lily[0]); g.addColorStop(1, sc.lily[1]);
       ctx.fillStyle = g;
       ctx.beginPath(); ctx.moveTo(x, y);
       ctx.quadraticCurveTo(x + Math.cos(a) * L * 0.5 + nx, y + Math.sin(a) * L * 0.5 + ny, tx, ty);
@@ -250,7 +261,7 @@ function drawLily(ctx: CanvasRenderingContext2D, x: number, y: number, r: number
   ctx.shadowColor = "transparent";
   // golden centre with stamens
   const c = ctx.createRadialGradient(x - r * 0.05, y - r * 0.05, 0, x, y, r * 0.28);
-  c.addColorStop(0, "#ffd75a"); c.addColorStop(1, "#e6a21e");
+  c.addColorStop(0, sc.heart[0]); c.addColorStop(1, sc.heart[1]);
   ctx.fillStyle = c; ctx.beginPath(); ctx.arc(x, y, r * 0.26, 0, TAU); ctx.fill();
   ctx.fillStyle = "#fff0a0";
   for (let i = 0; i < 16; i++) { const a = rot + (i / 16) * TAU; ctx.beginPath(); ctx.arc(x + Math.cos(a) * r * 0.2, y + Math.sin(a) * r * 0.2, r * 0.03, 0, TAU); ctx.fill(); }
@@ -263,6 +274,75 @@ export function drawScene(ctx: CanvasRenderingContext2D, pond: Pond, shadow = 0.
   const top = document.createElement("canvas"); top.width = ctx.canvas.width; top.height = ctx.canvas.height;
   drawTop(top.getContext("2d")!, pond);
   ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.drawImage(top, 0, 0);
+}
+
+// a border of rounded stones around the pond: bigger and piled up in the corners, a dark wet edge
+// at the water line and their shadow falling onto the water. Stones are seeded, so they never move.
+type Stone = { x: number; y: number; rx: number; ry: number; a: number; c: number; moss: boolean; wob: number[] };
+let stoneCache: { key: string; stones: Stone[]; shoreline: [number, number][] } | null = null;
+function stonesFor(pond: Pond) {
+  const key = `${Math.round(pond.w)}x${Math.round(pond.h)}:${pond.border.toFixed(1)}`;
+  if (stoneCache?.key === key) return stoneCache;
+  let seed = 4242; const rnd = () => ((seed = (seed * 1664525 + 1013904223) >>> 0) / 4294967296);
+  const B = pond.border, cx = pond.w / 2, cy = pond.h / 2;
+  // the shoreline: walk around the pond until shore() == 1
+  const shoreline: [number, number][] = [];
+  for (let i = 0; i < 240; i++) {
+    const ang = (i / 240) * Math.PI * 2; let lo = 0, hi = Math.max(pond.w, pond.h);
+    for (let k = 0; k < 22; k++) { const m = (lo + hi) / 2; pond.shore(cx + Math.cos(ang) * m, cy + Math.sin(ang) * m) < 1 ? (lo = m) : (hi = m); }
+    shoreline.push([cx + Math.cos(ang) * lo, cy + Math.sin(ang) * lo]);
+  }
+  const stones: Stone[] = [];
+  const make = (x: number, y: number, s: number) => stones.push({ x, y, rx: s * (0.8 + rnd() * 0.45), ry: s * (0.6 + rnd() * 0.3), a: rnd() * Math.PI, c: Math.floor(rnd() * 4), moss: rnd() < 0.3, wob: Array.from({ length: 12 }, () => 0.92 + rnd() * 0.12) });
+  // two rows along the shore, irregular sizes; a few boulders
+  let acc = 0;
+  for (let i = 0; i < shoreline.length; i++) {
+    const [x0, y0] = shoreline[i], [x1, y1] = shoreline[(i + 1) % shoreline.length]; acc += Math.hypot(x1 - x0, y1 - y0);
+    if (acc < B * 0.9) continue; acc = 0;
+    const nx = x0 - cx, ny = y0 - cy, nl = Math.hypot(nx, ny) || 1, ox = nx / nl, oy = ny / nl;
+    const big = rnd() < 0.12;
+    make(x0 + ox * B * 0.25, y0 + oy * B * 0.25, B * (big ? 1.25 : 0.5 + rnd() * 0.4));
+    if (rnd() < 0.7) make(x0 + ox * B * (0.95 + rnd() * 0.4), y0 + oy * B * (0.95 + rnd() * 0.4), B * (0.45 + rnd() * 0.5));
+  }
+  for (const [qx, qy] of [[0, 0], [pond.w, 0], [0, pond.h], [pond.w, pond.h]]) for (let k = 0; k < 4; k++) make(qx + (qx ? -1 : 1) * B * (0.6 + rnd() * 1.4), qy + (qy ? -1 : 1) * B * (0.6 + rnd() * 1.4), B * (0.8 + rnd() * 0.7));
+  stones.sort((p, q) => q.rx - p.rx);
+  stoneCache = { key, stones, shoreline };
+  return stoneCache;
+}
+
+function stonePath(ctx: CanvasRenderingContext2D, s: Stone, dx = 0, dy = 0, grow = 1) {
+  const n = s.wob.length; ctx.beginPath();
+  for (let i = 0; i <= n + 1; i++) {
+    const k = i % n, a = (k / n) * Math.PI * 2, r = s.wob[k] * grow;
+    const px = s.x + dx + Math.cos(s.a) * Math.cos(a) * s.rx * r - Math.sin(s.a) * Math.sin(a) * s.ry * r;
+    const py = s.y + dy + Math.sin(s.a) * Math.cos(a) * s.rx * r + Math.cos(s.a) * Math.sin(a) * s.ry * r;
+    if (i === 0) ctx.moveTo(px, py); else { const pk = (k + n - 1) % n, pa = (pk / n) * Math.PI * 2; const mx = (px + s.x + dx + Math.cos(s.a) * Math.cos(pa) * s.rx * s.wob[pk] * grow - Math.sin(s.a) * Math.sin(pa) * s.ry * s.wob[pk] * grow) / 2; const my = (py + s.y + dy + Math.sin(s.a) * Math.cos(pa) * s.rx * s.wob[pk] * grow + Math.cos(s.a) * Math.sin(pa) * s.ry * s.wob[pk] * grow) / 2; ctx.quadraticCurveTo(mx, my, (mx + px) / 2, (my + py) / 2); }
+  }
+  ctx.closePath();
+}
+
+function drawBorder(ctx: CanvasRenderingContext2D, pond: Pond, sc: Scheme) {
+  const { stones, shoreline } = stonesFor(pond), B = pond.border;
+  // the bank outside the water: moss and earth
+  ctx.save();
+  ctx.beginPath(); ctx.rect(-10, -10, pond.w + 20, pond.h + 20);
+  shoreline.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y))); ctx.closePath();
+  ctx.fillStyle = sc.moss; ctx.fill("evenodd");
+  ctx.clip("evenodd");
+  for (let i = 0; i < 160; i++) { const x = ((i * 97.3) % 1) * pond.w + ((i * 37) % pond.w), y = ((i * 61) % pond.h); ctx.fillStyle = i % 3 ? "rgba(0,0,0,0.12)" : "rgba(255,255,230,0.08)"; ctx.beginPath(); ctx.arc(x % pond.w, y, B * (0.15 + (i % 5) * 0.05), 0, Math.PI * 2); ctx.fill(); }
+  ctx.restore();
+  // a dark wet band where the water meets the stones, then their shadows on the water
+  ctx.save(); ctx.strokeStyle = "rgba(0,0,0,0.35)"; ctx.lineWidth = B * 0.5; ctx.filter = `blur(${B * 0.3}px)`;
+  ctx.beginPath(); shoreline.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y))); ctx.closePath(); ctx.stroke();
+  ctx.fillStyle = "rgba(0,0,0,0.3)";
+  for (const s of stones) { stonePath(ctx, s, B * 0.12, B * 0.22, 1.05); ctx.fill(); }
+  ctx.restore();
+  for (const s of stones) {
+    const grd = ctx.createRadialGradient(s.x - s.rx * 0.35, s.y - s.ry * 0.4, s.rx * 0.1, s.x, s.y, s.rx * 1.15);
+    grd.addColorStop(0, sc.stone[s.c]); grd.addColorStop(0.7, sc.stone[(s.c + 2) % 4]); grd.addColorStop(1, sc.stoneDark);
+    ctx.fillStyle = grd; stonePath(ctx, s); ctx.fill();
+    if (s.moss) { ctx.save(); stonePath(ctx, s); ctx.clip(); ctx.fillStyle = sc.moss; ctx.globalAlpha = 0.6; ctx.beginPath(); ctx.ellipse(s.x - s.rx * 0.3, s.y - s.ry * 0.45, s.rx * 0.6, s.ry * 0.4, s.a, 0, Math.PI * 2); ctx.fill(); ctx.restore(); }
+  }
 }
 
 function petalPath(ctx: CanvasRenderingContext2D, x: number, y: number, r: number, a: number) {

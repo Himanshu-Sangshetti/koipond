@@ -120,6 +120,7 @@ export function drawUnder(ctx: CanvasRenderingContext2D, pond: Pond, shadow = 0.
   }
   ctx.filter = `blur(${Math.max(1, unit * 0.12 * sx)}px)`; ctx.fillStyle = `rgba(0,0,0,${shadow * 0.75})`;
   for (const p of pond.pads) { padPath(ctx, p.x + p.r * 0.35, p.y + p.r * 0.5, p.r, p.angle, p.notch); ctx.fill(); }
+  if (pond.border > 0) for (const st of stonesFor(pond).stones) { const g = ctx.createRadialGradient(st.x + st.rx * 0.3, st.y + st.ry * 0.45, st.rx * 0.3, st.x + st.rx * 0.3, st.y + st.ry * 0.45, st.rx * 1.35); g.addColorStop(0, `rgba(0,0,0,${shadow * 0.6})`); g.addColorStop(1, "rgba(0,0,0,0)"); ctx.fillStyle = g; ctx.beginPath(); ctx.arc(st.x + st.rx * 0.3, st.y + st.ry * 0.45, st.rx * 1.35, 0, TAU); ctx.fill(); }
   ctx.fillStyle = `rgba(0,0,0,${shadow * 0.5})`;
   for (const p of pond.petals) { const o = unit * (0.06 + p.z * 0.8); petalPath(ctx, p.x + o, p.y + o * 1.4, p.r * (1 + p.z * 0.6), p.angle); ctx.fill(); }
   ctx.restore();
@@ -168,7 +169,7 @@ export function drawUnder(ctx: CanvasRenderingContext2D, pond: Pond, shadow = 0.
 }
 
 /** Things floating on the surface: food and lily pads. */
-export function drawTop(ctx: CanvasRenderingContext2D, pond: Pond) {
+export function drawTop(ctx: CanvasRenderingContext2D, pond: Pond, props?: HTMLCanvasElement) {
   const W = ctx.canvas.width, H = ctx.canvas.height, sx = W / pond.w, sy = H / pond.h;
   ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.clearRect(0, 0, W, H); ctx.setTransform(sx, 0, 0, sy, 0, 0);
   const unit = Math.min(pond.w, pond.h) * 0.11;
@@ -193,6 +194,9 @@ export function drawTop(ctx: CanvasRenderingContext2D, pond: Pond) {
     for (let i = 0; i < n; i++) { const x = Math.random() * pond.w, y = Math.random() * pond.h, l = unit * (0.08 + Math.random() * 0.12); ctx.moveTo(x, y); ctx.lineTo(x + l * 0.25, y + l); }
     ctx.stroke();
   }
+  // splash droplets and wake sparks: small points of light, fading
+  for (const sp of pond.sparks) { if (sp.age < 0) continue; const k = 1 - sp.age / sp.life; ctx.fillStyle = `rgba(245,255,250,${0.85 * k})`; ctx.beginPath(); ctx.arc(sp.x, sp.y, sp.r * (0.6 + k * 0.6), 0, TAU); ctx.fill(); }
+  for (const fl of pond.flashes) { const k = 1 - fl.age / 0.5, R = unit * (0.25 + fl.age * 0.8); const g = ctx.createRadialGradient(fl.x, fl.y, 0, fl.x, fl.y, R); g.addColorStop(0, `rgba(255,255,255,${0.55 * k})`); g.addColorStop(1, "rgba(255,255,255,0)"); ctx.fillStyle = g; ctx.beginPath(); ctx.arc(fl.x, fl.y, R, 0, TAU); ctx.fill(); }
   for (const b of pond.bubbles) {
     if (b.age < 0) continue;
     const k = Math.min(1, b.age / 0.3), r = b.r * (0.6 + 0.4 * k);
@@ -200,8 +204,14 @@ export function drawTop(ctx: CanvasRenderingContext2D, pond: Pond) {
     ctx.beginPath(); ctx.arc(b.x, b.y, r, 0, TAU); ctx.stroke();
     ctx.fillStyle = `rgba(255,255,255,${0.7 * k})`; ctx.beginPath(); ctx.arc(b.x - r * 0.35, b.y - r * 0.35, r * 0.25, 0, TAU); ctx.fill();
   }
-  for (const p of pond.pads) drawPad(ctx, p, scheme(pond));
-  if (pond.border > 0) drawBorder(ctx, pond, scheme(pond));
+  if (props) {
+    // lit 3D pads and rocks, then the flowers on top of their pads
+    ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.drawImage(props, 0, 0, W, H); ctx.restore();
+    for (const p of pond.pads) if (p.flower) drawLily(ctx, p.x + Math.cos(p.angle + Math.PI) * p.r * 0.15, p.y + Math.sin(p.angle + Math.PI) * p.r * 0.15, p.r * 0.48, p.angle * 3, scheme(pond));
+  } else {
+    for (const p of pond.pads) drawPad(ctx, p, scheme(pond));
+    if (pond.border > 0) drawBorder(ctx, pond, scheme(pond));
+  }
 }
 
 // colours for floating things and the border, per art style, so they sit in the same world as the water
@@ -280,7 +290,7 @@ export function drawScene(ctx: CanvasRenderingContext2D, pond: Pond, shadow = 0.
 // at the water line and their shadow falling onto the water. Stones are seeded, so they never move.
 type Stone = { x: number; y: number; rx: number; ry: number; a: number; c: number; moss: boolean; wob: number[] };
 let stoneCache: { key: string; stones: Stone[]; shoreline: [number, number][] } | null = null;
-function stonesFor(pond: Pond) {
+export function stonesFor(pond: Pond) {
   const key = `${Math.round(pond.w)}x${Math.round(pond.h)}:${pond.border.toFixed(1)}`;
   if (stoneCache?.key === key) return stoneCache;
   let seed = 4242; const rnd = () => ((seed = (seed * 1664525 + 1013904223) >>> 0) / 4294967296);

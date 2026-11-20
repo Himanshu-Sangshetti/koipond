@@ -58,6 +58,7 @@ export interface Fish {
 }
 
 export interface Bubble { x: number; y: number; r: number; age: number; life: number }
+export interface Spark { x: number; y: number; vx: number; vy: number; age: number; life: number; r: number }
 export interface Pellet { x: number; y: number; vx: number; vy: number; age: number; eaten: boolean }
 export interface Ripple { x: number; y: number; age: number; power: number; kind: "tap" | "drop" | "nibble" | "wake" }
 export interface Pad { x: number; y: number; r: number; spin: number; angle: number; vx: number; vy: number; notch: number; tone: number; flower: boolean }
@@ -81,7 +82,7 @@ const JOINTS = 16, TAIL = 4;
 
 export class Pond {
   w: number; h: number; t = 0;
-  fish: Fish[] = []; bubbles: Bubble[] = []; pellets: Pellet[] = []; ripples: Ripple[] = []; pads: Pad[] = []; petals: Petal[] = []; weeds: Weed[] = [];
+  fish: Fish[] = []; sparks: Spark[] = []; flashes: { x: number; y: number; age: number }[] = []; bubbles: Bubble[] = []; pellets: Pellet[] = []; ripples: Ripple[] = []; pads: Pad[] = []; petals: Petal[] = []; weeds: Weed[] = [];
   private petalMax = 0; private nextPetal = 0;
   current: V = { x: 0, y: 0 };
   /** Width of the stone border around the pond (pond pixels); 0 = no border. */
@@ -169,6 +170,15 @@ export class Pond {
   }
 
   // ------------------------------------------------------------------------------------- events
+  /** A tap lands: a crown of droplets thrown out, a brief flash, and the ring. */
+  splash(x: number, y: number) {
+    const u = this.unit;
+    for (let i = 0; i < 46; i++) { const a = this.rnd.between(0, TAU), sp = u * this.rnd.between(0.6, 2.2); this.sparks.push({ x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, age: -this.rnd.between(0, 0.05), life: this.rnd.between(0.35, 0.8), r: u * this.rnd.between(0.012, 0.03) }); }
+    this.flashes.push({ x, y, age: 0 });
+    if (this.sparks.length > 400) this.sparks.splice(0, this.sparks.length - 400);
+    this.ripple(x, y, "tap", 1);
+  }
+
   ripple(x: number, y: number, kind: Ripple["kind"] = "tap", power = 1) {
     const rings = kind === "tap" ? 3 : 1;
     for (let i = 0; i < rings; i++) this.ripples.push({ x, y, age: -i * 0.09, power: power * (1 - i * 0.22), kind });
@@ -191,9 +201,15 @@ export class Pond {
     p.speed = p.speed * 0.6 + moved * 0.4; p.x = x; p.y = y; p.inside = inside;
     if (moved > 0.5) p.still = 0;
     // a finger moving through the water drags a wake behind it
-    if (inside && len(x - this.lastWake.x, y - this.lastWake.y) > this.unit * 0.12) {
-      const fresh = this.lastWake.x < -1e8 || len(x - this.lastWake.x, y - this.lastWake.y) > this.unit * 2;
-      if (!fresh) this.ripple(x, y, "wake", 0.45 + Math.min(0.5, p.speed / (this.unit * 0.25)));
+    if (inside && len(x - this.lastWake.x, y - this.lastWake.y) > this.unit * 0.06) {
+      const d = len(x - this.lastWake.x, y - this.lastWake.y), fresh = this.lastWake.x < -1e8 || d > this.unit * 3;
+      if (!fresh) {
+        const steps = Math.min(4, Math.ceil(d / (this.unit * 0.08))), power = Math.min(1, 0.35 + d / (this.unit * 0.3));
+        for (let q = 1; q <= steps; q++) this.ripple(this.lastWake.x + (x - this.lastWake.x) * q / steps, this.lastWake.y + (y - this.lastWake.y) * q / steps, "wake", power);
+        // a few points of light peel away to either side, like a boat's wake
+        const nx = -(y - this.lastWake.y) / d, ny = (x - this.lastWake.x) / d;
+        for (const side of [1, -1]) this.sparks.push({ x, y, vx: nx * side * this.unit * 0.25, vy: ny * side * this.unit * 0.25, age: 0, life: 0.6, r: this.unit * 0.012 });
+      }
       this.lastWake = { x, y };
     }
     if (!inside) this.lastWake = { x: -1e9, y: -1e9 };
@@ -261,6 +277,10 @@ export class Pond {
     }
     for (const b of this.bubbles) { b.age += dt; b.x += this.current.x * u * 0.2 * dt; b.y += this.current.y * u * 0.2 * dt; if (b.age > b.life) this.ripple(b.x, b.y, "nibble", 0.25); }
     this.bubbles = this.bubbles.filter((b) => b.age <= b.life).slice(-60);
+    for (const sp of this.sparks) { sp.age += dt; if (sp.age > 0) { sp.x += sp.vx * dt; sp.y += sp.vy * dt; sp.vx *= Math.exp(-dt * 3); sp.vy *= Math.exp(-dt * 3); } }
+    this.sparks = this.sparks.filter((sp) => sp.age < sp.life);
+    for (const fl of this.flashes) fl.age += dt;
+    this.flashes = this.flashes.filter((fl) => fl.age < 0.5);
     for (const r of this.ripples) r.age += dt;
     this.ripples = this.ripples.filter((r) => r.age < (r.kind === "tap" ? 2.6 : r.kind === "drop" ? 1.6 : 1.0));
 

@@ -7,7 +7,8 @@
 // Tap the water for ripples, double-tap (or long-press) to drop food. Pauses when off screen and
 // shows a still pond for people who prefer reduced motion.
 import { forwardRef, useEffect, useImperativeHandle, useRef } from "react";
-import { drawScene, drawTop, drawUnder } from "./draw";
+import { drawScene, drawTop, drawUnder, stonesFor } from "./draw";
+import { createProps3D } from "./props3d";
 import { createWater, type Look } from "./gl";
 import { createRealWater } from "./water";
 import { createFish3D } from "./fish3d";
@@ -96,6 +97,8 @@ export const KoiPond = forwardRef<KoiPondHandle, KoiPondProps>(function KoiPond(
     const topLayer = document.createElement("canvas"), tctx = topLayer.getContext("2d")!;
     let fish3d: ReturnType<typeof createFish3D> | null = null;
     if (real) { try { fish3d = createFish3D(); } catch (e) { console.warn("koipond: 3D koi unavailable", e); } }
+    let props3d: ReturnType<typeof createProps3D> | null = null;
+    if (real) { try { props3d = createProps3D(); } catch (e) { console.warn("koipond: 3D props unavailable", e); } }
     if (fish3d && location.search.includes("pondraw")) (window as unknown as { __koi3d?: HTMLCanvasElement }).__koi3d = fish3d.canvas;
     const scene = document.createElement("canvas"), sctx = scene.getContext("2d")!;
     const dpr = Math.min(2, window.devicePixelRatio || 1);
@@ -104,7 +107,7 @@ export const KoiPond = forwardRef<KoiPondHandle, KoiPondProps>(function KoiPond(
     const fit = () => {
       const r = canvas.getBoundingClientRect(), w = Math.max(1, Math.round(r.width * scale)), h = Math.max(1, Math.round(r.height * scale));
       canvas.width = Math.round(r.width * dpr); canvas.height = Math.round(r.height * dpr);
-      scene.width = w; scene.height = h; topLayer.width = Math.round(r.width * Math.min(dpr, 1.5)); topLayer.height = Math.round(r.height * Math.min(dpr, 1.5));
+      scene.width = w; scene.height = h; topLayer.width = Math.round(r.width * Math.min(dpr, 1)); topLayer.height = Math.round(r.height * Math.min(dpr, 1));
       if (!pond) { pond = new Pond({ width: w, height: h, fish, fishSize, pads, petals, minnows, seed }); pond.rain = rainRef.current; pondRef.current = pond; }
       else if (w !== pond.w || h !== pond.h) pond.resize(w, h);
       sizeRef.current = { w, h };
@@ -123,7 +126,7 @@ export const KoiPond = forwardRef<KoiPondHandle, KoiPondProps>(function KoiPond(
     const onDown = (e: PointerEvent) => {
       if (!pond) return; const p = toPond(e); if (!p.inside) return;
       const now = performance.now();
-      if (now - lastTap < 320) pond.feed(p.x, p.y); else pond.ripple(p.x, p.y, "tap");
+      if (now - lastTap < 320) pond.feed(p.x, p.y); else pond.splash(p.x, p.y);
       lastTap = now; press = now; pressAt = p; drop.down = true;
     };
     const onUp = () => { press = 0; drop.down = false; };
@@ -160,7 +163,7 @@ export const KoiPond = forwardRef<KoiPondHandle, KoiPondProps>(function KoiPond(
       if (scrollCurrent) pond.current = { x: flow.x, y: flow.y };
       pond.style = styleRef.current; pond.border = borderRef.current ? Math.min(pond.w, pond.h) * 0.06 : 0;
       while (acc >= 1 / 60) { pond.step(1 / 60); acc -= 1 / 60; }
-      if (real) { drawUnder(sctx, pond, 0.8, false); drawTop(tctx, pond); fish3d?.render(pond, Math.round(canvas.width / dpr * Math.min(dpr, 1.5)), Math.round(canvas.height / dpr * Math.min(dpr, 1.5))); real.render(scene, topLayer, pond.w, pond.h, pond.ripples, pond.t, themeRef.current, dpr, 2, pond, fish3d?.canvas); }
+      if (real) { drawUnder(sctx, pond, 0.8, false); props3d?.render(pond, Math.round(topLayer.width / Math.min(dpr, 1)), Math.round(topLayer.height / Math.min(dpr, 1)), pond.border > 0 ? stonesFor(pond).stones : []); drawTop(tctx, pond, props3d?.canvas); fish3d?.render(pond, Math.round(canvas.width / dpr * Math.min(dpr, 1)), Math.round(canvas.height / dpr * Math.min(dpr, 1))); real.render(scene, topLayer, pond.w, pond.h, pond.ripples, pond.t, themeRef.current, dpr, 2, pond, fish3d?.canvas); }
       else { drawScene(sctx, pond); water!.render(scene, pond.w, pond.h, pond.ripples, pond.t, themeRef.current, dpr); }
       if (visible && !reduced) raf = requestAnimationFrame(loop);
     };
@@ -171,7 +174,7 @@ export const KoiPond = forwardRef<KoiPondHandle, KoiPondProps>(function KoiPond(
       cancelAnimationFrame(raf); ro.disconnect(); io.disconnect();
       window.removeEventListener("wheel", onWheel); window.removeEventListener("touchmove", onTouchMove); window.removeEventListener("touchend", onTouchEnd);
       canvas.removeEventListener("pointermove", onMove); canvas.removeEventListener("pointerdown", onDown); window.removeEventListener("pointerup", onUp);
-      pondRef.current = null; fish3d?.dispose();
+      pondRef.current = null; fish3d?.dispose(); props3d?.dispose();
     };
   }, [fish, fishSize, pads, petals, minnows, seed, interactive, scale, scrollCurrent]);
 

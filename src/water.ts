@@ -27,10 +27,12 @@ void main(){
   float h = s.r, v = s.g;
   float n = texture(state, uv + vec2(texel.x, 0)).r + texture(state, uv - vec2(texel.x, 0)).r
           + texture(state, uv + vec2(0, texel.y)).r + texture(state, uv - vec2(0, texel.y)).r;
-  v += (n * .25 - h) * 1.9;
-  v *= .992;
+  // a slow wave: rings spread at walking pace and linger, the way they do on a real pond
+  v += (n * .25 - h) * .42;
+  v *= .9965;
   h += v;
-  h *= .9985;
+  h *= .9992;
+  h = clamp(h, -.6, .6);
   for (int i = 0; i < 16; i++) {
     if (i >= dropN) break;
     vec2 d = (uv - drops[i].xy) / vec2(1., texel.x / texel.y);
@@ -252,6 +254,9 @@ void main(){
   float spec = pow(max(0., dot(reflect(-S, n), V)), 380.);
   col += vec3(1., .98, .92) * spec * 1.6;
   col += vec3(.9, .95, 1.) * pow(max(0., dot(reflect(-S, n), V)), 40.) * .05;
+  // light caught on the slopes of every ripple and wake, so they read as bright rings
+  float ripL = length(vec2(hr - hl, hu - hd)) * 70.;
+  col += lin(vec3(.92, 1., .96)) * smoothstep(.12, .8, ripL) * .22;
 
   vec4 tp = texture(top, st);
 
@@ -338,7 +343,7 @@ const hex = (h: string) => { const n = parseInt(h.replace("#", ""), 16); return 
 
 export interface WaterLook { mode: "dither" | "color" | "ink"; palette: [string, string, string, string]; deep: string; shallow: string; tint?: string; pixel: number; bright?: number; floor?: "sand" | "stones" | "pebbles"; caustics?: number; clarity?: number; waves?: number; film?: boolean; absorb?: [number, number, number] }
 
-const STRENGTH: Record<Ripple["kind"], [number, number]> = { tap: [0.03, 1], drop: [0.014, 0.55], nibble: [0.01, 0.4], wake: [0.018, 0.42] }; // radius (of short side), strength
+const STRENGTH: Record<Ripple["kind"], [number, number]> = { tap: [0.035, 2.2], drop: [0.012, 0.7], nibble: [0.01, 0.5], wake: [0.012, 0.45] }; // radius (of short side), strength
 
 export function createRealWater(canvas: HTMLCanvasElement) {
   const gl = canvas.getContext("webgl2", { antialias: false, premultipliedAlpha: false, preserveDrawingBuffer: true });

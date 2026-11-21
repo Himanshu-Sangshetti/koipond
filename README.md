@@ -12,7 +12,7 @@
 <p align="center">
   <a href="https://github.com/Himanshu-Sangshetti/koipond/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/Himanshu-Sangshetti/koipond/ci.yml?branch=main&label=CI&labelColor=0e2a2e" alt="CI"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-6fae8e?labelColor=0e2a2e" alt="MIT licence"></a>
-  <a href="CHANGELOG.md"><img src="https://img.shields.io/npm/v/@hxlfed/koipond?label=npm&color=e0623a&labelColor=0e2a2e" alt="Version"></a>
+  <a href="https://www.npmjs.com/package/@hxlfed/koipond"><img src="https://img.shields.io/npm/v/%40hxlfed%2Fkoipond?label=npm&color=e0623a&labelColor=0e2a2e" alt="Version"></a>
   <a href="#install"><img src="https://img.shields.io/badge/shadcn-registry-f2ebdf?labelColor=0e2a2e" alt="shadcn registry"></a>
   <a href="https://koipond-demo.vercel.app"><img src="https://img.shields.io/badge/demo-koipond--demo.vercel.app-2bb3ae?labelColor=0e2a2e" alt="Live demo"></a>
   <a href="https://github.com/Himanshu-Sangshetti/koipond/stargazers"><img src="https://img.shields.io/github/stars/Himanshu-Sangshetti/koipond?style=flat&color=e8b04a&labelColor=0e2a2e" alt="GitHub stars"></a>
@@ -31,22 +31,7 @@
 
 ## Install
 
-One command copies the component into your project, so it's yours to change:
-
-```bash
-npx shadcn@latest add https://raw.githubusercontent.com/Himanshu-Sangshetti/koipond/main/public/r/koi-pond.json
-```
-
-```tsx
-import { KoiPond } from "@/components/koi-pond";
-
-export default function Hero() {
-  return <KoiPond style={{ height: "100vh" }} />;
-}
-```
-
-<details>
-<summary>Other ways: npm, or copy the files</summary>
+**npm**
 
 ```bash
 npm install @hxlfed/koipond three
@@ -54,13 +39,26 @@ npm install @hxlfed/koipond three
 
 ```tsx
 import { KoiPond } from "@hxlfed/koipond";
+
+export default function Hero() {
+  return <KoiPond style={{ height: "100vh" }} />;
+}
+```
+
+**shadcn** copies the source into your project instead, so it's yours to change:
+
+```bash
+npx shadcn@latest add https://raw.githubusercontent.com/Himanshu-Sangshetti/koipond/main/public/r/koi-pond.json
+```
+
+```tsx
+import { KoiPond } from "@/components/koi-pond";
 ```
 
 Or copy [`src/`](src) into your project and install `three`.
-</details>
 
 It fills its parent, so give it a height. Works with React 18 and 19, Next.js (App Router included), Vite and
-anything else that renders React. `three` is the only dependency.
+anything else that renders React. `three` (0.160 or newer) is the only other dependency.
 
 <p align="center"><img src=".github/assets/divider.webp" alt="" width="420"></p>
 

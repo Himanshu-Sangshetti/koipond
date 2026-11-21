@@ -1,5 +1,5 @@
 {
-  "name": "koipond",
+  "name": "@hxlfed/koipond",
   "version": "0.1.0",
   "description": "A living koi pond for the web: procedural koi with real water (ripples, refraction, light) in WebGL2 via three.js. A drop-in React component.",
   "type": "module",
@@ -67,5 +67,8 @@
   "homepage": "https://github.com/Himanshu-Sangshetti/koipond#readme",
   "bugs": {
     "url": "https://github.com/Himanshu-Sangshetti/koipond/issues"
+  },
+  "publishConfig": {
+    "access": "public"
   }
 }

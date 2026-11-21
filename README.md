@@ -12,7 +12,7 @@
 <p align="center">
   <a href="https://github.com/Himanshu-Sangshetti/koipond/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/Himanshu-Sangshetti/koipond/ci.yml?branch=main&label=CI&labelColor=0e2a2e" alt="CI"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-6fae8e?labelColor=0e2a2e" alt="MIT licence"></a>
-  <a href="CHANGELOG.md"><img src="https://img.shields.io/github/package-json/v/Himanshu-Sangshetti/koipond?label=version&color=e0623a&labelColor=0e2a2e" alt="Version"></a>
+  <a href="CHANGELOG.md"><img src="https://img.shields.io/npm/v/@hxlfed/koipond?label=npm&color=e0623a&labelColor=0e2a2e" alt="Version"></a>
   <a href="#install"><img src="https://img.shields.io/badge/shadcn-registry-f2ebdf?labelColor=0e2a2e" alt="shadcn registry"></a>
   <a href="https://koipond-demo.vercel.app"><img src="https://img.shields.io/badge/demo-koipond--demo.vercel.app-2bb3ae?labelColor=0e2a2e" alt="Live demo"></a>
   <a href="https://github.com/Himanshu-Sangshetti/koipond/stargazers"><img src="https://img.shields.io/github/stars/Himanshu-Sangshetti/koipond?style=flat&color=e8b04a&labelColor=0e2a2e" alt="GitHub stars"></a>
@@ -49,11 +49,11 @@ export default function Hero() {
 <summary>Other ways: npm, or copy the files</summary>
 
 ```bash
-npm install koipond three
+npm install @hxlfed/koipond three
 ```
 
 ```tsx
-import { KoiPond } from "koipond";
+import { KoiPond } from "@hxlfed/koipond";
 ```
 
 Or copy [`src/`](src) into your project and install `three`.
@@ -121,7 +121,7 @@ The same pond in three styles. Switch any time; the koi keep swimming and the ne
 
 ```tsx
 import { useRef } from "react";
-import { KoiPond, type KoiPondHandle } from "koipond";
+import { KoiPond, type KoiPondHandle } from "@hxlfed/koipond";
 
 const pond = useRef<KoiPondHandle>(null);
 // coordinates are 0..1 across the pond
@@ -136,7 +136,7 @@ pond.current?.formation(slots, flow);   // ask the koi to hold a shape (one slot
 ### A look of your own
 
 ```ts
-import type { Look } from "koipond";
+import type { Look } from "@hxlfed/koipond";
 
 const dusk: Look = { mode: "color", palette: ["#000", "#000", "#000", "#000"], deep: "#0b2a3c", shallow: "#1e5a64", pixel: 1, caustics: 1.2 };
 const mono: Look = { mode: "dither", palette: ["#0a0a0a", "#333333", "#999999", "#f5f5f5"], deep: "#050505", shallow: "#1b1b1b", pixel: 2 };

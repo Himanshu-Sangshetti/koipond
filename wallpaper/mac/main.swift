@@ -22,7 +22,6 @@ struct Settings: Codable {
     var size = 0.18
     var rainAmount = 0.5
     var showIcon = true
-    var music = "playlist/6jTot6wOCMCSfAnvg6WL5A"
 
     init() {}
     // older saves miss newer fields: keep what is there, default the rest
@@ -39,7 +38,6 @@ struct Settings: Codable {
         size = (try? c.decode(Double.self, forKey: .size)) ?? z.size
         rainAmount = (try? c.decode(Double.self, forKey: .rainAmount)) ?? z.rainAmount
         showIcon = (try? c.decode(Bool.self, forKey: .showIcon)) ?? z.showIcon
-        music = (try? c.decode(String.self, forKey: .music)) ?? z.music
     }
 
     static let key = "settings"
@@ -123,18 +121,17 @@ final class PondWindow: NSWindow {
     }
 }
 
-// MARK: - the pop-up panel (looks, timer, music, settings)
+// MARK: - the pop-up panel (looks, focus timer, settings)
 
 final class PanelWindow: NSPanel {
     let web: WKWebView
     override var canBecomeKey: Bool { true }
 
     init(page: URL, handler: WKScriptMessageHandler) {
-        let size = NSSize(width: 340, height: 650)
+        let size = NSSize(width: 340, height: 664)
         let config = WKWebViewConfiguration()
         config.userContentController.add(handler, name: "koi")
         config.preferences.setValue(true, forKey: "developerExtrasEnabled")
-        config.mediaTypesRequiringUserActionForPlayback = []
         web = WKWebView(frame: NSRect(origin: .zero, size: size), configuration: config)
         web.setValue(false, forKey: "drawsBackground")
         web.autoresizingMask = [.width, .height]
@@ -153,20 +150,12 @@ final class PanelWindow: NSPanel {
         blur.autoresizingMask = [.width, .height]
         blur.addSubview(web)
         contentView = blur
-        web.uiDelegate = self
         web.loadFileURL(page, allowingReadAccessTo: page.deletingLastPathComponent())
     }
 
     func js(_ s: String) { web.evaluateJavaScript(s, completionHandler: nil) }
 }
 
-extension PanelWindow: WKUIDelegate {
-    // links that open a new window (Spotify's logo, "play on Spotify") go to the browser or the Spotify app
-    func webView(_ w: WKWebView, createWebViewWith c: WKWebViewConfiguration, for a: WKNavigationAction, windowFeatures f: WKWindowFeatures) -> WKWebView? {
-        if let u = a.request.url { NSWorkspace.shared.open(u) }
-        return nil
-    }
-}
 
 struct FocusTimer { var mode = "focus"; var left = 25 * 60; var running = false }
 
@@ -445,7 +434,7 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate, WKScriptMessag
         let s: [String: Any] = ["look": settings.look, "fish": settings.fish, "size": settings.size, "rain": settings.rain, "rainAmount": settings.rainAmount,
                                 "pads": settings.pads, "petals": settings.petals, "interactive": settings.interactive, "quality": settings.quality,
                                 "login": loginEnabled, "showIcon": settings.showIcon]
-        let state: [String: Any] = ["settings": s, "timer": ["mode": focus.mode, "left": focus.left, "running": focus.running], "music": settings.music]
+        let state: [String: Any] = ["settings": s, "timer": ["mode": focus.mode, "left": focus.left, "running": focus.running]]
         if let d = try? JSONSerialization.data(withJSONObject: state), let j = String(data: d, encoding: .utf8) { panel?.js("window.panel && panel.sync(\(j))") }
     }
 
@@ -454,9 +443,8 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate, WKScriptMessag
         switch t {
         case "ready": syncPanel()
         case "close": hidePanel()
-        case "open": if let u = (b["v"] as? String).flatMap(URL.init(string:)), ["https", "spotify"].contains(u.scheme ?? "") { NSWorkspace.shared.open(u); hidePanel() }
+        case "open": if let u = (b["v"] as? String).flatMap(URL.init(string:)), u.scheme == "https" { NSWorkspace.shared.open(u); hidePanel() }
         case "quit": NSApp.terminate(nil)
-        case "music": if let v = b["v"] as? String { settings.music = v; settings.save(); syncPanel() }
         case "timer":
             if b["a"] as? String == "reset" { focus = FocusTimer() } else { focus.running.toggle() }
             showCountdown(); syncPanel()

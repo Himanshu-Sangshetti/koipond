@@ -26,12 +26,6 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 .ghost { width: 34px; height: 34px; display: grid; place-items: center; border-radius: 50%; color: rgba(255, 255, 255, .55); }
 .ghost:hover { color: #fff; background: rgba(255, 255, 255, .08); }
 
-/* music */
-.music iframe { display: block; width: 100%; height: 152px; border: 0; border-radius: 12px; }
-.mlink { display: flex; gap: 6px; margin-top: 8px; }
-.mlink input { flex: 1; min-width: 0; padding: 8px 10px; border-radius: 10px; border: 1px solid rgba(255, 255, 255, .12); background: rgba(255, 255, 255, .06); color: #fff; font: inherit; outline: none; -webkit-user-select: text; user-select: text; }
-.mlink input::placeholder { color: rgba(255, 255, 255, .4); }
-.mlink button { padding: 8px 12px; border-radius: 10px; background: rgba(255, 255, 255, .9); color: #06141a; font-weight: 500; }
 
 /* sliders and toggles (same as the demo) */
 .slider { display: block; margin-bottom: 14px; }
@@ -59,8 +53,8 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 .foot { display: flex; justify-content: space-between; align-items: center; color: rgba(255, 255, 255, .4); }
 .foot button:hover { color: #fff; }
 
-.hint { margin: 8px 2px 0; color: rgba(255, 255, 255, .4); font-size: 11px; line-height: 1.4; }
-.music .label { margin-bottom: 8px; }
+
+
 .star { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-radius: 12px; background: rgba(255, 255, 255, .06); color: rgba(255, 255, 255, .75); text-align: left; transition: background .2s; }
 .star:hover { background: rgba(255, 255, 255, .12); color: #fff; }
 .star span:first-of-type { flex: 1; }

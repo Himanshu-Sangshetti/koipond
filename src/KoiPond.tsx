@@ -21,7 +21,7 @@ export const LOOKS: Record<string, Look> = {
   violet: { mode: "dither", palette: ["#09080f", "#2a2160", "#6c5ce7", "#e4dfff"], deep: "#05040a", shallow: "#15122a", pixel: 2 },
   mono: { mode: "dither", palette: ["#0c0c0c", "#3a3a3a", "#9a9a9a", "#f2f0ea"], deep: "#050505", shallow: "#1b1b1b", pixel: 2 },
   ember: { mode: "dither", palette: ["#0d0806", "#5a1f12", "#e2451c", "#fde6c8"], deep: "#070403", shallow: "#1c0f0a", pixel: 2 },
-  natural: { mode: "color", palette: ["#000", "#000", "#000", "#000"], deep: "#0a5a6e", shallow: "#2bb3ae", tint: "#f2fffd", pixel: 1, caustics: .7, waves: .8, bright: 1.14, absorb: [2.1, .62, .58] },
+  natural: { mode: "color", palette: ["#000", "#000", "#000", "#000"], deep: "#062a33", shallow: "#175a56", tint: "#f2fbf8", pixel: 1, caustics: .45, waves: .8 },
 };
 
 export interface KoiPondHandle {

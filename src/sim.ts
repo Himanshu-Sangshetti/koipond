@@ -170,7 +170,7 @@ export class Pond {
   private makePad(): Pad {
     const r = this.rnd;
     // each pad has a home inside the frame it drifts back to, so it never wanders off screen for long
-    const hx = r.between(0.12, 0.88) * this.w, hy = r.between(0.15, 0.85) * this.h, rr = r.between(0.42, 0.68);
+    const hx = r.between(0.04, 0.96) * this.w, hy = r.between(0.06, 0.94) * this.h, rr = r.between(0.42, 0.68);
     return { x: hx, y: hy, r: this.unit * rr, spin: r.between(-0.03, 0.03), angle: r.between(0, TAU), vx: 0, vy: 0, notch: r.between(0.3, 0.5), tone: r.next(), flower: r.next() < 0.45, hx, hy, rRatio: rr, presence: 1, leaving: false };
   }
 
@@ -319,7 +319,7 @@ export class Pond {
       p.angle += p.spin * dt;
       // a gentle pull back toward home, and a soft bounce off the frame edges
       p.vx += (p.hx - p.x) * dt * 0.05; p.vy += (p.hy - p.y) * dt * 0.05;
-      const m = p.r * 0.6;
+      const m = 0; // a pad may drift half off the edge before it turns back
       if (p.x < m) { p.x = m; p.vx = Math.abs(p.vx) * 0.5; } if (p.x > this.w - m) { p.x = this.w - m; p.vx = -Math.abs(p.vx) * 0.5; }
       if (p.y < m) { p.y = m; p.vy = Math.abs(p.vy) * 0.5; } if (p.y > this.h - m) { p.y = this.h - m; p.vy = -Math.abs(p.vy) * 0.5; }
       p.presence += ((p.leaving ? 0 : 1) - p.presence) * (1 - Math.exp(-dt * 2.5));

@@ -1,22 +1,41 @@
-# koipond
+<a href="https://koipond-demo.vercel.app">
+  <img src=".github/assets/hero.webp" alt="koipond: koi swimming through clear teal water, with lily pads, a water lily and drifting sakura petals." width="100%">
+</a>
 
-A living koi pond for the web. Koi swim on their own through real-looking water: ripples spread and
-linger, the surface bends the pond floor, light plays across it, rain falls and sakura drifts down.
-Glide over it and you leave a wake; tap it and it splashes; double-tap and the koi come to feed.
+<h3 align="center">A living koi pond for the web.</h3>
 
-![koipond: tap the water, the koi come to look](media/demo.gif)
+<p align="center">
+  Koi that swim on their own through real-looking water. Glide over it, tap it, feed them.<br>
+  One React component, open source. <a href="https://koipond-demo.vercel.app">Try it live</a>.
+</p>
 
-**[Try it live →](https://koipond-demo.vercel.app)**
+<p align="center">
+  <a href="https://github.com/Himanshu-Sangshetti/koipond/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/Himanshu-Sangshetti/koipond/ci.yml?branch=main&label=CI&labelColor=0e2a2e" alt="CI"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-6fae8e?labelColor=0e2a2e" alt="MIT licence"></a>
+  <a href="CHANGELOG.md"><img src="https://img.shields.io/github/package-json/v/Himanshu-Sangshetti/koipond?label=version&color=e0623a&labelColor=0e2a2e" alt="Version"></a>
+  <a href="#install"><img src="https://img.shields.io/badge/shadcn-registry-f2ebdf?labelColor=0e2a2e" alt="shadcn registry"></a>
+  <a href="https://koipond-demo.vercel.app"><img src="https://img.shields.io/badge/demo-koipond--demo.vercel.app-2bb3ae?labelColor=0e2a2e" alt="Live demo"></a>
+  <a href="https://github.com/Himanshu-Sangshetti/koipond/stargazers"><img src="https://img.shields.io/github/stars/Himanshu-Sangshetti/koipond?style=flat&color=e8b04a&labelColor=0e2a2e" alt="GitHub stars"></a>
+</p>
+
+<p align="center">
+  <a href="https://koipond-demo.vercel.app"><b>Live demo</b></a> ·
+  <a href="#install"><b>Install</b></a> ·
+  <a href="#the-looks"><b>Looks</b></a> ·
+  <a href="#props"><b>Props</b></a> ·
+  <a href="#how-it-works"><b>How it works</b></a> ·
+  <a href="CONTRIBUTING.md"><b>Contributing</b></a>
+</p>
+
+<p align="center"><img src=".github/assets/divider.webp" alt="" width="420"></p>
 
 ## Install
 
-**shadcn** (recommended): copies the source into your project, so it's yours to edit.
+One command copies the component into your project, so it's yours to change:
 
 ```bash
 npx shadcn@latest add https://raw.githubusercontent.com/Himanshu-Sangshetti/koipond/main/public/r/koi-pond.json
 ```
-
-This adds `components/koi-pond/` and installs `three`. Then:
 
 ```tsx
 import { KoiPond } from "@/components/koi-pond";
@@ -26,7 +45,8 @@ export default function Hero() {
 }
 ```
 
-**npm**: if you'd rather keep it as a dependency.
+<details>
+<summary>Other ways: npm, or copy the files</summary>
 
 ```bash
 npm install koipond three
@@ -36,33 +56,46 @@ npm install koipond three
 import { KoiPond } from "koipond";
 ```
 
-**Copy and paste**: the files in [`src/`](src) work as they are; you'll need `three` installed.
+Or copy [`src/`](src) into your project and install `three`.
+</details>
 
-It fills its parent, so give the parent (or the component) a height. Works with React 18 and 19, Next.js (App
-Router included: the component is marked `"use client"`), Vite and anything else that renders React.
+It fills its parent, so give it a height. Works with React 18 and 19, Next.js (App Router included), Vite and
+anything else that renders React. `three` is the only dependency.
 
-## What people can do with it
+<p align="center"><img src=".github/assets/divider.webp" alt="" width="420"></p>
+
+## Play with it
+
+<p align="center">
+  <a href="https://koipond-demo.vercel.app"><img src=".github/assets/demo.gif" alt="Tapping the water: rings spread and the koi come to look." width="720"></a>
+</p>
 
 | Do this | And the pond… |
 |---|---|
-| Glide the pointer over the water | leaves a wake of small ripples that catches the light |
-| Hold the pointer still near the koi | the bold ones come over to look |
+| Glide over the water | leaves a wake that catches the light |
+| Hold still near the koi | the bold ones swim over to look |
 | Move fast near a fish | the shy ones dart away |
-| Tap | a little crown of droplets jumps up and falls back, and rings spread out |
-| Double-tap or long-press | drops food; nearby koi race over and eat it |
-| Scroll or swipe over it | stirs a current: koi, petals and pads stream with it, then it settles |
+| Tap | droplets jump and rings spread out |
+| Double-tap or long-press | drops food; nearby koi race over to eat |
+| Scroll or swipe | stirs a current; koi, petals and pads stream with it |
 
-## Looks
+<p align="center"><img src=".github/assets/divider.webp" alt="" width="420"></p>
 
-| `look` | |
-|---|---|
-| `natural` | clear teal water over a stone floor (default) |
-| `ink` | a woodblock print: indigo water in soft steps, ink outlines, flat colour, paper grain |
-| `violet` | dithered: dark violet water, the koi glowing in the light tones (also `ember`, `mono`) |
+## The looks
 
-Settings change live too: koi grow in or sink away, pads drift in, nothing resets. The look can change at any time: the new style spreads across the pond like a ripple from wherever the person last clicked, while the koi carry on swimming through it.
+The same pond in three styles. Switch any time; the koi keep swimming and the new look ripples across the water.
 
-![koipond, dither look](media/dither.jpg)
+<table>
+  <tr>
+    <td width="33%" align="center"><img src=".github/assets/look-natural.webp" alt="Natural: clear teal water over a stone floor." width="100%"><br><b>natural</b></td>
+    <td width="33%" align="center"><img src=".github/assets/look-ink.webp" alt="Ink: a woodblock print with indigo water and outlined koi." width="100%"><br><b>ink</b></td>
+    <td width="33%" align="center"><img src=".github/assets/look-dither.webp" alt="Dither: violet water in a four-colour ordered dither." width="100%"><br><b>violet</b> (dither)</td>
+  </tr>
+</table>
+
+`ember` and `mono` are two more dithered palettes, or pass your own `Look`.
+
+<p align="center"><img src=".github/assets/divider.webp" alt="" width="420"></p>
 
 ## Props
 
@@ -109,6 +142,8 @@ const dusk: Look = { mode: "color", palette: ["#000", "#000", "#000", "#000"], d
 const mono: Look = { mode: "dither", palette: ["#0a0a0a", "#333333", "#999999", "#f5f5f5"], deep: "#050505", shallow: "#1b1b1b", pixel: 2 };
 ```
 
+<p align="center"><img src=".github/assets/divider.webp" alt="" width="420"></p>
+
 ## How it works
 
 **Koi.** Each koi has a temperament (bold to shy, lazy to restless) that shapes every choice. It picks an
@@ -136,9 +171,8 @@ to a simpler stylised water.
 
 ## Credits
 
-Inspired by the wider world of procedural koi ponds, including
-[nagomi](https://github.com/msk1039/nagomi). No code is shared; koipond is written from scratch.
-Built on [three.js](https://threejs.org) (MIT).
+Inspired by the wider world of procedural koi ponds, including [nagomi](https://github.com/msk1039/nagomi).
+No code is shared; koipond is written from scratch. Built on [three.js](https://threejs.org).
 
 ## License
 

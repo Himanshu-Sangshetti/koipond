@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { KoiPond } from "koipond";
 
-type Settings = { look: "natural" | "ink" | "violet"; fish: number; rain: number; pads: boolean; petals: boolean; fps: number; paused: boolean };
+type Settings = { look: "natural" | "ink" | "violet"; fish: number; rain: number; pads: boolean; petals: boolean; fps: number; paused: boolean; dpr?: number };
 const DEFAULTS: Settings = { look: "natural", fish: 14, rain: 0.5, pads: true, petals: true, fps: 60, paused: false };
 
 declare global {
@@ -23,6 +23,8 @@ declare global {
 
 // --- frame gate: the app can pause the pond (desktop hidden, screen asleep) and cap the frame rate (battery)
 let settings: Settings = { ...DEFAULTS, ...(window.__koiInit ?? {}) };
+// render resolution: a wallpaper doesn't need full Retina; the pond reads devicePixelRatio once at start
+if (settings.dpr) { const d = settings.dpr; Object.defineProperty(window, "devicePixelRatio", { get: () => d }); }
 const raf0 = window.requestAnimationFrame.bind(window);
 const held: FrameRequestCallback[] = [];
 let lastFrame = 0;

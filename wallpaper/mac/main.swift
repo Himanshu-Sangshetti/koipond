@@ -170,9 +170,12 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     func pageSettings() -> String {
-        let fps = (onBattery || ProcessInfo.processInfo.isLowPowerModeEnabled) ? 30 : 60
+        let env = ProcessInfo.processInfo.environment
+        var fps = (onBattery || ProcessInfo.processInfo.isLowPowerModeEnabled) ? 30 : 60
+        if let f = env["KOI_FPS"].flatMap(Int.init) { fps = f }
+        let dpr = env["KOI_DPR"] ?? "0"
         let paused = settings.paused || hiddenBySystem
-        return "{\"look\":\"\(settings.look)\",\"fish\":\(settings.fish),\"rain\":\(settings.rain ? 0.5 : 0),\"pads\":\(settings.pads),\"petals\":\(settings.petals),\"fps\":\(fps),\"paused\":\(paused)}"
+        return "{\"look\":\"\(settings.look)\",\"fish\":\(settings.fish),\"rain\":\(settings.rain ? 0.5 : 0),\"pads\":\(settings.pads),\"petals\":\(settings.petals),\"fps\":\(fps),\"paused\":\(paused),\"dpr\":\(dpr)}"
     }
 
     @objc func pushSettings() {

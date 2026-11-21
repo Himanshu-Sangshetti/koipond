@@ -4,7 +4,7 @@ import fs from "node:fs";
 import path from "node:path";
 
 const root = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..");
-const files = ["KoiPond.tsx", "sim.ts", "draw.ts", "stage.ts", "water.ts", "gl.ts", "fish3d.ts", "props3d.ts", "sprites.ts", "index.ts"];
+const files = ["KoiPond.tsx", "sim.ts", "draw.ts", "stage.ts", "water.ts", "gl.ts", "fish3d.ts", "props3d.ts", "index.ts"];
 const pkg = JSON.parse(fs.readFileSync(path.join(root, "package.json"), "utf8"));
 
 const item = {

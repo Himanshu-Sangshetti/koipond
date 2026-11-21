@@ -93,24 +93,7 @@ function fins(): THREE.CanvasTexture {
 }
 
 // ------------------------------------------------------------------------------- the renderer
-type Koi = { body: THREE.Mesh; fins: THREE.Mesh[]; tail: THREE.Mesh; mat: THREE.MeshPhysicalMaterial; finMat: THREE.MeshBasicMaterial; finMesh: THREE.Mesh; finPos: THREE.BufferAttribute };
-
-/** All fins and the tail of one koi in a single mesh (one draw call instead of six). */
-function mergeStrips(parts: THREE.BufferGeometry[]) {
-  const nv = parts.reduce((n, g) => n + g.getAttribute("position").count, 0);
-  const pos = new Float32Array(nv * 3), uv = new Float32Array(nv * 2), idx: number[] = [];
-  let o = 0;
-  for (const g of parts) {
-    const c = g.getAttribute("position").count;
-    uv.set((g.getAttribute("uv") as THREE.BufferAttribute).array as Float32Array, o * 2);
-    for (const i of Array.from(g.getIndex()!.array as ArrayLike<number>)) idx.push(i + o);
-    o += c;
-  }
-  const geo = new THREE.BufferGeometry();
-  const pa = new THREE.BufferAttribute(pos, 3); pa.setUsage(THREE.DynamicDrawUsage);
-  geo.setAttribute("position", pa); geo.setAttribute("uv", new THREE.BufferAttribute(uv, 2)); geo.setIndex(idx);
-  return { geo, pa };
-}
+type Koi = { body: THREE.Mesh; fins: THREE.Mesh[]; tail: THREE.Mesh; mat: THREE.MeshPhysicalMaterial; finMat: THREE.MeshBasicMaterial };
 
 function strip(n: number) {
   // a grid of (n+1) x 2 vertices with triangles, used for fins and the tail
@@ -155,19 +138,13 @@ export function createFish3D(renderer: THREE.WebGLRenderer) {
     });
     const body = new THREE.Mesh(geo, mat); scene.add(body);
     const finMat = new THREE.MeshBasicMaterial({ map: fins(), color: new THREE.Color(f.variety.fin).lerp(new THREE.Color("#f3eee4"), 0.25), transparent: true, opacity: 0.68, side: THREE.DoubleSide, depthWrite: false, premultipliedAlpha: true });
-    // fins are flat strips: one pass for both faces (three.js otherwise draws transparent double-sided
-    // materials twice and rebuilds the material state each time, which is slow)
-    finMat.forceSinglePass = true;
-    // the fin and tail shapes are updated piece by piece, then copied into one merged mesh that is drawn
     const fms: THREE.Mesh[] = [];
-    for (let k = 0; k < 4; k++) fms.push(new THREE.Mesh(strip(8), finMat));
-    fms.push(new THREE.Mesh(strip(10), finMat));
+    for (let k = 0; k < 4; k++) { const m = new THREE.Mesh(strip(8), finMat); scene.add(m); fms.push(m); }
+    const dorsal = new THREE.Mesh(strip(10), finMat); scene.add(dorsal); fms.push(dorsal);
     const tailGeo = strip(14), tuv = tailGeo.getAttribute("uv") as THREE.BufferAttribute;
     for (let q = 0; q <= 14; q++) { tuv.setXY(q * 2, q / 14, 0); tuv.setXY(q * 2 + 1, q / 14, 1); } // rays run along the tail
-    const tail = new THREE.Mesh(tailGeo, finMat);
-    const merged = mergeStrips([...fms.map((m) => m.geometry), tailGeo]);
-    const finMesh = new THREE.Mesh(merged.geo, finMat); finMesh.frustumCulled = false; scene.add(finMesh);
-    return { body, fins: fms, tail, mat, finMat, finMesh, finPos: merged.pa };
+    const tail = new THREE.Mesh(tailGeo, finMat); scene.add(tail);
+    return { body, fins: fms, tail, mat, finMat };
   };
 
   const water = new THREE.Color("#3b5e58");
@@ -185,27 +162,17 @@ export function createFish3D(renderer: THREE.WebGLRenderer) {
         for (let i = 0; i <= RINGS; i++) { const a = pts[Math.max(0, i - 1)], b = pts[Math.min(RINGS, i + 1)], l = Math.hypot(a.x - b.x, a.y - b.y) || 1; tg.push({ x: (a.x - b.x) / l, y: (a.y - b.y) / l }); }
         const z0 = -f.depth * f.girth * 3; // deeper fish sit lower
         // body: rounded cross-sections, a little flatter on the back than a circle
-        const geo = k.body.geometry, pos = geo.getAttribute("position") as THREE.BufferAttribute;
-        let nrm = geo.getAttribute("normal") as THREE.BufferAttribute | undefined;
-        if (!nrm) { nrm = new THREE.BufferAttribute(new Float32Array(pos.count * 3), 3); geo.setAttribute("normal", nrm); }
-        const P = pos.array as Float32Array, N = nrm.array as Float32Array;
+        const pos = k.body.geometry.getAttribute("position") as THREE.BufferAttribute;
         for (let i = 0; i <= RINGS; i++) {
           const s = i / RINGS, wd = f.girth * width(s), ht = wd * 0.78, nx = -tg[i].y, ny = tg[i].x;
-          // the body narrows toward head and tail: tilt the normals along the body by that slope
-          const slope = (f.girth * (width(Math.min(1, s + 0.02)) - width(Math.max(0, s - 0.02)))) / (0.04 * f.length || 1);
-          // nose: pull the first ring in so the snout is rounded, not cut off
-          const nose = i === 0 ? 0.0 : 1, push = i === 0 ? f.girth * 0.25 : 0;
           for (let j = 0; j <= SIDES; j++) {
-            const th = (j / SIDES) * Math.PI, cx = Math.cos(th), cz = Math.sin(th), v = (i * (SIDES + 1) + j) * 3;
-            P[v] = pts[i].x + nx * cx * wd * nose + tg[i].x * push; P[v + 1] = pts[i].y + ny * cx * wd * nose + tg[i].y * push; P[v + 2] = z0 + cz * ht;
-            // ellipse cross-section normal (written directly: much cheaper than recomputing from triangles)
-            let ex = (nx * cx) / wd, ey = (ny * cx) / wd, ez = cz / ht;
-            const el = Math.hypot(ex, ey, ez) || 1; ex /= el; ey /= el; ez /= el;
-            const lx = ex - tg[i].x * slope, ly = ey - tg[i].y * slope, ll = Math.hypot(lx, ly, ez) || 1;
-            N[v] = lx / ll; N[v + 1] = ly / ll; N[v + 2] = ez / ll;
+            const th = (j / SIDES) * Math.PI, cx = Math.cos(th), cz = Math.sin(th);
+            // nose: pull the first ring in so the snout is rounded, not cut off
+            const nose = i === 0 ? 0.0 : 1;
+            pos.setXYZ(i * (SIDES + 1) + j, pts[i].x + nx * cx * wd * nose + tg[i].x * (i === 0 ? f.girth * 0.25 : 0), pts[i].y + ny * cx * wd * nose + tg[i].y * (i === 0 ? f.girth * 0.25 : 0), z0 + cz * ht);
           }
         }
-        pos.needsUpdate = true; nrm.needsUpdate = true;
+        pos.needsUpdate = true; k.body.geometry.computeVertexNormals();
         k.mat.color.copy(new THREE.Color(1, 1, 1).lerp(water, f.depth * 0.18));
         k.finMat.opacity = 0.68 - f.depth * 0.15;
         // pectoral and pelvic fins: membranes swept back from the body, paddling gently
@@ -238,11 +205,8 @@ export function createFish3D(renderer: THREE.WebGLRenderer) {
             p.setXYZ(q * 2 + 1, c.x + dy * spread + dx * fork, c.y - dx * spread + dy * fork, z0);
           }
           p.needsUpdate = true; }
-        { const dst = k.finPos.array as Float32Array; let o = 0;
-          for (const m of [...k.fins, k.tail]) { const src = (m.geometry.getAttribute("position") as THREE.BufferAttribute).array as Float32Array; dst.set(src, o); o += src.length; }
-          k.finPos.needsUpdate = true; }
       }
-      for (const [id, k] of kois) if (!alive.has(id)) { scene.remove(k.body, k.finMesh); k.body.geometry.dispose(); k.finMesh.geometry.dispose(); kois.delete(id); }
+      for (const [id, k] of kois) if (!alive.has(id)) { scene.remove(k.body, k.tail, ...k.fins); kois.delete(id); }
       renderer.setRenderTarget(target); renderer.setClearColor(0x000000, 0); renderer.clear(); renderer.render(scene, cam); renderer.setRenderTarget(null);
     },
     dispose() { target.dispose(); pmrem.dispose(); },

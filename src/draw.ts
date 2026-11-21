@@ -89,8 +89,7 @@ function shade(hexc: string, k: number) {
 }
 
 /** Everything under the surface: shadows on the floor, then the fish (deepest first). */
-/** `soft`: the layer is low-res and blurred later on the GPU, so skip the (slow) canvas blur filters. */
-export function drawUnder(ctx: CanvasRenderingContext2D, pond: Pond, shadow = 0.8, fish = true, soft = false) {
+export function drawUnder(ctx: CanvasRenderingContext2D, pond: Pond, shadow = 0.8, fish = true) {
   const W = ctx.canvas.width, H = ctx.canvas.height, sx = W / pond.w, sy = H / pond.h;
   ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.clearRect(0, 0, W, H); ctx.setTransform(sx, 0, 0, sy, 0, 0);
   const fishes = [...pond.fish].sort((a, b) => b.depth - a.depth);
@@ -115,11 +114,11 @@ export function drawUnder(ctx: CanvasRenderingContext2D, pond: Pond, shadow = 0.
   ctx.save();
   if (fish) for (const f of fishes) {
     const g = frames.get(f)!, off = unit * (0.1 + (1 - f.depth) * 0.3);
-    if (!soft) ctx.filter = `blur(${Math.max(0.8, unit * (0.025 + (1 - f.depth) * 0.04) * sx)}px)`;
+    ctx.filter = `blur(${Math.max(0.8, unit * (0.025 + (1 - f.depth) * 0.04) * sx)}px)`;
     ctx.fillStyle = `rgba(0,20,25,${shadow * (0.6 + f.depth * 0.3)})`;
     bodyPath(ctx, g, f, off * 0.45, off); ctx.fill(); tailFan(ctx, g, f, off * 0.45, off); ctx.fill(); fins(ctx, g, f, off * 0.45, off);
   }
-  if (!soft) ctx.filter = `blur(${Math.max(1, unit * 0.12 * sx)}px)`; ctx.fillStyle = `rgba(0,0,0,${shadow * 0.75})`;
+  ctx.filter = `blur(${Math.max(1, unit * 0.12 * sx)}px)`; ctx.fillStyle = `rgba(0,0,0,${shadow * 0.75})`;
   for (const p of pond.pads) { padPath(ctx, p.x + p.r * 0.35, p.y + p.r * 0.5, p.r, p.angle, p.notch); ctx.fill(); }
   if (pond.border > 0) for (const st of stonesFor(pond).stones) { const g = ctx.createRadialGradient(st.x + st.rx * 0.3, st.y + st.ry * 0.45, st.rx * 0.3, st.x + st.rx * 0.3, st.y + st.ry * 0.45, st.rx * 1.35); g.addColorStop(0, `rgba(0,0,0,${shadow * 0.6})`); g.addColorStop(1, "rgba(0,0,0,0)"); ctx.fillStyle = g; ctx.beginPath(); ctx.arc(st.x + st.rx * 0.3, st.y + st.ry * 0.45, st.rx * 1.35, 0, TAU); ctx.fill(); }
   ctx.fillStyle = `rgba(0,0,0,${shadow * 0.5})`;
@@ -355,14 +354,4 @@ function petalPath(ctx: CanvasRenderingContext2D, x: number, y: number, r: numbe
 
 function padPath(ctx: CanvasRenderingContext2D, x: number, y: number, r: number, angle: number, notch: number) {
   ctx.beginPath(); ctx.moveTo(x, y); ctx.arc(x, y, r, angle + notch * 0.5, angle + TAU - notch * 0.5); ctx.closePath();
-}
-
-/** For the GPU floaters (see sprites.ts): one petal and one lily, drawn once into a two-cell atlas (cell size C). */
-export function drawFloaterAtlas(ctx: CanvasRenderingContext2D, C: number, style: string) {
-  const sc = SCHEMES[style] ?? SCHEMES.natural, r = C * 0.47;
-  ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.clearRect(0, 0, C * 2, C);
-  const grd = ctx.createLinearGradient(C / 2 - r, C / 2, C / 2 + r, C / 2);
-  grd.addColorStop(0, sc.petal[0]); grd.addColorStop(1, sc.petal[1]);
-  ctx.fillStyle = grd; petalPath(ctx, C / 2, C / 2, r, 0); ctx.fill();
-  drawLily(ctx, C * 1.5, C / 2, r, 0, sc);
 }

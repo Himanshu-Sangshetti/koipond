@@ -61,8 +61,6 @@ export interface Fish {
 
 export interface Bubble { x: number; y: number; r: number; age: number; life: number }
 export interface Spark { x: number; y: number; vx: number; vy: number; age: number; life: number; r: number; drip?: boolean }
-/** Food on the water at once, and the pause between handfuls (seconds). */
-const MAX_FOOD = 8, FEED_PAUSE = 0.45;
 export interface Pellet { x: number; y: number; vx: number; vy: number; age: number; eaten: boolean }
 export interface Ripple { x: number; y: number; age: number; power: number; kind: "tap" | "drop" | "nibble" | "wake" }
 export interface Pad { x: number; y: number; r: number; spin: number; angle: number; vx: number; vy: number; notch: number; tone: number; flower: boolean; hx: number; hy: number; rRatio: number; presence: number; leaving: boolean }
@@ -86,7 +84,6 @@ const JOINTS = 16, TAIL = 4;
 
 export class Pond {
   w: number; h: number; t = 0;
-  private lastFeed = -10;
   fish: Fish[] = []; sparks: Spark[] = []; flashes: { x: number; y: number; age: number }[] = []; bubbles: Bubble[] = []; pellets: Pellet[] = []; ripples: Ripple[] = []; pads: Pad[] = []; petals: Petal[] = []; weeds: Weed[] = [];
   private petalMax = 0; private nextPetal = 0;
   current: V = { x: 0, y: 0 };
@@ -200,14 +197,9 @@ export class Pond {
   }
 
   /** Scatter a few food pellets around a point; nearby fish come to feed. */
-  feed(x: number, y: number, n = 4) {
-    // food is finite: a handful on the water at once and a short pause between handfuls, so repeated
-    // clicks don't pile every koi into one spot (they used to crowd and fold over each other)
-    if (this.t - this.lastFeed < FEED_PAUSE) return;
-    const room = MAX_FOOD - this.pellets.filter((p) => !p.eaten).length;
-    n = Math.min(n, room); if (n <= 0) return;
-    this.lastFeed = this.t;
+  feed(x: number, y: number, n = 5) {
     for (let i = 0; i < n; i++) { const a = this.rnd.between(0, TAU), s = this.rnd.between(4, 22); this.pellets.push({ x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s, age: 0, eaten: false }); }
+    if (this.pellets.length > 40) this.pellets.splice(0, this.pellets.length - 40);
     this.ripple(x, y, "drop", 0.8);
   }
 
@@ -294,10 +286,7 @@ export class Pond {
 
   private nearestPellet(f: Fish, within: number): Pellet | null {
     let best: Pellet | null = null, bd = within;
-    // one koi per pellet: the others keep swimming instead of crowding in
-    const takers = new Map<Pellet, number>();
-    for (const o of this.fish) if (o !== f && o.activity === "feed" && o.target) takers.set(o.target as Pellet, (takers.get(o.target as Pellet) ?? 0) + 1);
-    for (const p of this.pellets) { if (p.eaten || (takers.get(p) ?? 0) >= 1) continue; const d = len(p.x - f.x, p.y - f.y); if (d < bd) { bd = d; best = p; } }
+    for (const p of this.pellets) { if (p.eaten) continue; const d = len(p.x - f.x, p.y - f.y); if (d < bd) { bd = d; best = p; } }
     return best;
   }
 

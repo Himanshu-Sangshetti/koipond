@@ -1,5 +1,5 @@
-# Builds the desktop wallpaper apps and attaches them to a GitHub release when a wallpaper tag
-# (wallpaper-v1.2.3) is pushed. On pull requests and manual runs it only builds.
+# Builds the desktop wallpaper apps. A wallpaper tag (wallpaper-v1.2.3) attaches the Mac app to a GitHub
+# release. The Windows app is built as a check only until it has been tried on a real PC.
 name: wallpaper
 on:
   push:
@@ -58,6 +58,6 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ github.ref_name }}
         run: |
-          gh release create "$TAG" dist/koipond-mac.zip dist/koipond-windows.zip \
+          gh release create "$TAG" dist/koipond-mac.zip \
             --repo "$GITHUB_REPOSITORY" --title "koipond wallpaper ${TAG#wallpaper-}" --latest \
-            --notes "The pond as your desktop wallpaper. Mac: curl -fsSL https://koipond-demo.vercel.app/install.sh | sh · Windows: irm https://koipond-demo.vercel.app/install.ps1 | iex"
+            --notes "The pond as your desktop wallpaper, for macOS. Install: curl -fsSL https://raw.githubusercontent.com/Himanshu-Sangshetti/koipond/main/wallpaper/install.sh | sh"

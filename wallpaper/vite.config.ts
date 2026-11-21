@@ -10,7 +10,8 @@ export default defineConfig({
   root: path.resolve(__dirname, "web"),
   plugins: [react(), viteSingleFile()],
   resolve: {
-    alias: { koipond: path.resolve(__dirname, "../src/index.ts") },
+    // the app ships its own copy of the pond (faster rendering, finite food); the npm component in ../src is untouched
+    alias: { koipond: path.resolve(__dirname, "pond/index.ts") },
     dedupe: ["react", "react-dom", "three"],
   },
   build: {

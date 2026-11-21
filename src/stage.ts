@@ -2,7 +2,7 @@
 //   1. ripple simulation: two half-float render targets, ping-ponged
 //   2. koi: three.js meshes rendered into a render target
 //   3. lily pads and rocks: three.js meshes rendered into a render target
-//   4. floor shadows are a small 2D canvas texture; petals, flowers and sparks are GPU sprites (sprites.ts)
+//   4. the 2D layers (floor shadows; petals, flowers, sparks) are uploaded as canvas textures
 //   5. one full-screen pass composites water, floor, koi, light and floaters onto the screen
 import * as THREE from "three";
 import { COMPOSE, STRENGTH, WAVE, hex, type WaterLook } from "./water";
@@ -39,7 +39,7 @@ export function createStage(canvas: HTMLCanvasElement) {
   };
 
   // 4. 2D layers as textures (uploaded each frame; no read-back)
-  const mkCanvasTex = () => { const t = new THREE.Texture(); t.minFilter = THREE.LinearFilter; t.magFilter = THREE.LinearFilter; t.generateMipmaps = false; t.colorSpace = THREE.NoColorSpace; t.flipY = false; t.premultiplyAlpha = true; return t; };
+  const mkCanvasTex = () => { const t = new THREE.Texture(); t.minFilter = THREE.LinearFilter; t.magFilter = THREE.LinearFilter; t.generateMipmaps = false; t.colorSpace = THREE.NoColorSpace; return t; };
   let underTex = mkCanvasTex(), topTex = mkCanvasTex(), underKey = "", topKey = "";
 
   // 5. composite
@@ -48,7 +48,7 @@ export function createStage(canvas: HTMLCanvasElement) {
     uniforms: {
       waves: { value: null }, fish: { value: underTex }, top: { value: topTex }, fishgl: { value: null }, props: { value: null },
       bakeMode: { value: 0 }, useBake: { value: 0 }, floorTex: { value: null },
-      useGL: { value: 1 }, fishPremul: { value: 1 }, fishLinear: { value: 1 }, useProps: { value: 0 }, flipT: { value: 1 }, topRT: { value: 0 },
+      useGL: { value: 1 }, fishPremul: { value: 1 }, fishLinear: { value: 1 }, useProps: { value: 0 }, flipT: { value: 1 },
       res: { value: new THREE.Vector2() }, pond: { value: new THREE.Vector2() }, wtexel: { value: new THREE.Vector2() },
       t: { value: 0 }, px: { value: 1 }, mode: { value: 1 }, bright: { value: 1 }, sand: { value: 0 }, causticAmt: { value: 1 }, clarity: { value: 1 }, waveAmt: { value: 1 }, film: { value: 0 },
       absorbK: { value: new THREE.Vector3(2.4, 0.92, 0.78) }, waterDeep: { value: new THREE.Vector3() }, waterShallow: { value: new THREE.Vector3() }, tint: { value: new THREE.Vector3(1, 1, 1) },
@@ -86,7 +86,7 @@ export function createStage(canvas: HTMLCanvasElement) {
   return {
     renderer,
     setSize(w: number, h: number) { renderer.setSize(w, h, false); },
-    render(o: { under: HTMLCanvasElement; top: HTMLCanvasElement | THREE.Texture; pond: Pond; look: WaterLook; dpr: number; fish: THREE.Texture | null; props: THREE.Texture | null; origin?: [number, number] }) {
+    render(o: { under: HTMLCanvasElement; top: HTMLCanvasElement; pond: Pond; look: WaterLook; dpr: number; fish: THREE.Texture | null; props: THREE.Texture | null; origin?: [number, number] }) {
       const { pond } = o; let look = o.look;
       const nk = lookKey(o.look);
       if (shown && nk !== shownKey && !trans) trans = { from: shown, t0: pond.t, origin: o.origin ?? [0.5, 0.5] };
@@ -108,14 +108,11 @@ export function createStage(canvas: HTMLCanvasElement) {
       renderer.setRenderTarget(null);
       // layers
       // three.js fixes a texture's size when it is first uploaded: after a resize, start fresh textures
-      const uk = `${o.under.width}x${o.under.height}`;
+      const uk = `${o.under.width}x${o.under.height}`, tk = `${o.top.width}x${o.top.height}`;
       if (uk !== underKey) { underTex.dispose(); underTex = mkCanvasTex(); composeMat.uniforms.fish.value = underTex; underKey = uk; }
+      if (tk !== topKey) { topTex.dispose(); topTex = mkCanvasTex(); composeMat.uniforms.top.value = topTex; topKey = tk; }
       underTex.image = o.under; underTex.needsUpdate = true;
-      if (o.top instanceof HTMLCanvasElement) {
-        const tk = `${o.top.width}x${o.top.height}`;
-        if (tk !== topKey) { topTex.dispose(); topTex = mkCanvasTex(); topKey = tk; }
-        topTex.image = o.top; topTex.needsUpdate = true; composeMat.uniforms.top.value = topTex; composeMat.uniforms.topRT.value = 0;
-      } else { composeMat.uniforms.top.value = o.top; composeMat.uniforms.topRT.value = 1; }
+      topTex.image = o.top; topTex.needsUpdate = true;
       const U = composeMat.uniforms, size = renderer.getDrawingBufferSize(new THREE.Vector2());
       const setLook = (lk: WaterLook) => { look = lk;
       U.waves.value = states[cur].texture; U.fishgl.value = o.fish; U.useGL.value = o.fish ? 1 : 0;

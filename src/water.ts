@@ -48,10 +48,19 @@ export const COMPOSE = `#version 300 es
 precision highp float;
 in vec2 uv; out vec4 o;
 uniform sampler2D waves, fish, top, fishgl, props;
-uniform float useGL, fishPremul, fishLinear, useProps, flipT, bakeMode, useBake;
+uniform float useGL, fishPremul, fishLinear, useProps, flipT, bakeMode, useBake, topRT;
 uniform sampler2D floorTex;
 // three.js keeps canvas and render-target images with their top row at v = 1; the pond's y runs down
 vec4 T(sampler2D s, vec2 v){ return texture(s, flipT > .5 ? vec2(v.x, 1. - v.y) : v); }
+// the 2D canvas layers are uploaded as they are (top row first, premultiplied): that lets browsers copy them on the GPU
+vec4 TC(sampler2D s, vec2 v){ vec4 c = texture(s, flipT > .5 ? v : vec2(v.x, 1. - v.y)); return vec4(c.rgb / max(c.a, 1e-4), c.a); }
+// the floaters: GPU sprites in a render target (premultiplied), or the 2D canvas
+vec4 TOP(vec2 v){ if (topRT > .5) { vec4 c = T(top, v); return vec4(c.rgb / max(c.a, 1e-4), c.a); } return TC(top, v); }
+// the soft under layer (low-res): a small blur while sampling, averaged premultiplied
+vec4 TCB(sampler2D s, vec2 v){ vec2 uv = flipT > .5 ? v : vec2(v.x, 1. - v.y); vec2 d = 1.4 / vec2(textureSize(s, 0)); vec4 c = texture(s, uv) * .25;
+  c += (texture(s, uv + vec2(d.x, 0.)) + texture(s, uv - vec2(d.x, 0.)) + texture(s, uv + vec2(0., d.y)) + texture(s, uv - vec2(0., d.y))) * .125;
+  c += (texture(s, uv + d) + texture(s, uv - d) + texture(s, uv + vec2(d.x, -d.y)) + texture(s, uv + vec2(-d.x, d.y))) * .0625;
+  return vec4(c.rgb / max(c.a, 1e-4), c.a); }
 uniform vec2 res, pond, wtexel;
 uniform float t, px, mode, bright, sand, causticAmt, clarity, waveAmt, film;
 uniform vec3 absorbK;
@@ -230,7 +239,7 @@ void main(){
   if (!lagoon) fl += cau * lin(vec3(.6, .66, .64)) * .62 * causticAmt * (1. - depth * .5);
 
   // fish and their shadows, drawn in 2D, seen through the water
-  vec4 f = T(fish, clamp(st + refrFish, vec2(.001), vec2(.999)));
+  vec4 f = TCB(fish, clamp(st + refrFish, vec2(.001), vec2(.999)));
   vec3 frgb = lin(f.rgb);
   float shadowA = 0.;
   if (useGL > .5){
@@ -276,7 +285,7 @@ void main(){
   float ripL = length(vec2(hr - hl, hu - hd)) * 70.;
   col += lin(vec3(.92, 1., .96)) * smoothstep(.12, .8, ripL) * .22;
 
-  vec4 tp = T(top, st);
+  vec4 tp = TOP(st);
   if (useProps > .5){
     // lit 3D pads and rocks (a linear render target, premultiplied) sit under the 2D floaters
     vec4 pr = T(props, st);
@@ -306,7 +315,7 @@ void main(){
     float ring = smoothstep(.35, .55, length(gw)) * (1. - smoothstep(.55, 1.1, length(gw)) * .5);
     wc = mix(wc, CREAM, ring * .75);
     // shadows of koi and pads: flat indigo
-    vec4 sh = T(fish, clamp(st, vec2(.001), vec2(.999)));
+    vec4 sh = TCB(fish, clamp(st, vec2(.001), vec2(.999)));
     wc = mix(wc, INK, max(shadowA * .55, (1. - step(.12, dot(sh.rgb, vec3(.33)))) * sh.a * .45));
     // koi: their colours in three flat tone bands, with an ink outline
     vec2 px2 = 1.6 / res;
@@ -329,7 +338,7 @@ void main(){
     ic = mix(ic, INK, smoothstep(.3, .6, aN - aX));
     // floating things: pads and petals posterised, outlined
     float tN = 0., tX = 1.;
-    for (int k = 0; k < 4; k++){ vec2 o = vec2(k == 0 ? 1. : k == 1 ? -1. : 0., k == 2 ? 1. : k == 3 ? -1. : 0.) * px2; float a2 = T(top, st + o).a; tN = max(tN, a2); tX = min(tX, a2); }
+    for (int k = 0; k < 4; k++){ vec2 o = vec2(k == 0 ? 1. : k == 1 ? -1. : 0., k == 2 ? 1. : k == 3 ? -1. : 0.) * px2; float a2 = TOP(st + o).a; tN = max(tN, a2); tX = min(tX, a2); }
     vec3 tc = tp.rgb; float tl = dot(tc, vec3(.299, .587, .114));
     tc = tc * (tl < .3 ? .8 : tl < .6 ? 1. : 1.08);
     ic = mix(ic, tc, step(.5, tp.a));

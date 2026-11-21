@@ -11,5 +11,5 @@ export default defineConfig({
     alias: { koipond: path.resolve(__dirname, "../src/index.ts") },
     dedupe: ["react", "react-dom", "three"],
   },
-  build: { outDir: path.resolve(__dirname, "build/web"), emptyOutDir: true, chunkSizeWarningLimit: 3000 },
+  build: { minify: false, outDir: path.resolve(__dirname, "build/web"), emptyOutDir: true, chunkSizeWarningLimit: 3000 },
 });

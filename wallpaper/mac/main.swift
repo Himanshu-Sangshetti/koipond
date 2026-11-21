@@ -39,6 +39,7 @@ final class LogBridge: NSObject, WKScriptMessageHandler, WKNavigationDelegate {
 }
 
 let debug = ProcessInfo.processInfo.environment["KOI_DEBUG"] != nil
+let bench = ProcessInfo.processInfo.environment["KOI_BENCH"] != nil
 
 final class PondWindow: NSWindow {
     let web: WKWebView
@@ -63,6 +64,13 @@ final class PondWindow: NSWindow {
         web.setValue(false, forKey: "drawsBackground")
         web.autoresizingMask = [.width, .height]
         web.navigationDelegate = LogBridge.shared
+        if bench { // keep drawing while covered (measuring only)
+            let sel = NSSelectorFromString("_setWindowOcclusionDetectionEnabled:")
+            if web.responds(to: sel), let m = class_getInstanceMethod(WKWebView.self, sel) {
+                typealias F = @convention(c) (AnyObject, Selector, Bool) -> Void
+                unsafeBitCast(method_getImplementation(m), to: F.self)(web, sel, false)
+            } else { NSLog("koipond: occlusion switch unavailable") }
+        }
         super.init(contentRect: screen.frame, styleMask: .borderless, backing: .buffered, defer: false)
         setFrame(screen.frame, display: false)
         level = NSWindow.Level(rawValue: Int(CGWindowLevelForKey(.desktopWindow)))
@@ -174,8 +182,9 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
         var fps = (onBattery || ProcessInfo.processInfo.isLowPowerModeEnabled) ? 30 : 60
         if let f = env["KOI_FPS"].flatMap(Int.init) { fps = f }
         let dpr = env["KOI_DPR"] ?? "0"
+        let scale = env["KOI_SCALE"] ?? "1"
         let paused = settings.paused || hiddenBySystem
-        return "{\"look\":\"\(settings.look)\",\"fish\":\(settings.fish),\"rain\":\(settings.rain ? 0.5 : 0),\"pads\":\(settings.pads),\"petals\":\(settings.petals),\"fps\":\(fps),\"paused\":\(paused),\"dpr\":\(dpr)}"
+        return "{\"look\":\"\(settings.look)\",\"fish\":\(settings.fish),\"rain\":\(settings.rain ? 0.5 : 0),\"pads\":\(settings.pads),\"petals\":\(settings.petals),\"fps\":\(fps),\"paused\":\(paused),\"dpr\":\(dpr),\"scale\":\(scale)\(env["KOI_EXTRA"].map { "," + $0 } ?? "")}"
     }
 
     @objc func pushSettings() {
@@ -191,7 +200,7 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     func updateOcclusion() {
         // pause while no part of any pond can be seen (full-screen apps, everything maximised)
-        let visible = debug || windows.contains { $0.occlusionState.contains(.visible) }
+        let visible = debug || bench || windows.contains { $0.occlusionState.contains(.visible) }
         if debug { NSLog("koipond: occlusion visible=%d", windows.contains { $0.occlusionState.contains(.visible) } ? 1 : 0) }
         hiddenBySystem = !visible
         pushSettings()

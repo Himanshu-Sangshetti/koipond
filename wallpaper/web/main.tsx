@@ -31,7 +31,9 @@ let lastFrame = 0;
 window.requestAnimationFrame = (cb: FrameRequestCallback) =>
   raf0(function tick(t) {
     if (settings.paused) { held.push(cb); return; }
-    if (t - lastFrame < 1000 / settings.fps - 2) { raf0(tick); return; }
+    // too early: sleep until the next frame is due instead of waking on every display refresh
+    const wait = 1000 / settings.fps - 2 - (t - lastFrame);
+    if (wait > 0) { setTimeout(() => raf0(tick), Math.max(0, wait - 8)); return; }
     lastFrame = t;
     (window as unknown as { __frames: number }).__frames = ((window as unknown as { __frames?: number }).__frames ?? 0) + 1;
     cb(t);

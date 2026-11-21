@@ -12,7 +12,11 @@ import { createProps3D } from "./props3d";
 import { createWater, type Look } from "./gl";
 import { createStage } from "./stage";
 import { createFish3D } from "./fish3d";
+import { createSprites } from "./sprites";
 import { Pond, type V } from "./sim";
+
+/** Resolution of the soft under layer relative to the pond, on the GPU stage. */
+const UNDER_SCALE = 0.34;
 
 export const LOOKS: Record<string, Look> = {
   ink: { mode: "ink", palette: ["#000", "#000", "#000", "#000"], deep: "#283850", shallow: "#80998c", tint: "#ffffff", pixel: 1, floor: "pebbles", caustics: 1, clarity: 1, waves: 1 },
@@ -109,6 +113,9 @@ export const KoiPond = forwardRef<KoiPondHandle, KoiPondProps>(function KoiPond(
     if (stage) { try { fish3d = createFish3D(stage.renderer); } catch (e) { console.warn("koipond: 3D koi unavailable", e); } }
     let props3d: ReturnType<typeof createProps3D> | null = null;
     if (stage) { try { props3d = createProps3D(stage.renderer); } catch (e) { console.warn("koipond: 3D props unavailable", e); } }
+    // petals, flowers, rain and splashes as GPU sprites (no per-frame canvas copy); the 2D top layer is the fallback
+    let sprites: ReturnType<typeof createSprites> | null = null;
+    if (stage && props3d) { try { sprites = createSprites(stage.renderer); } catch (e) { console.warn("koipond: GPU floaters unavailable", e); } }
     const scene = document.createElement("canvas"), sctx = scene.getContext("2d")!;
     const dpr = Math.min(2, window.devicePixelRatio || 1);
     let pond: Pond | null = null;
@@ -116,7 +123,10 @@ export const KoiPond = forwardRef<KoiPondHandle, KoiPondProps>(function KoiPond(
     const fit = () => {
       const r = canvas.getBoundingClientRect(), w = Math.max(1, Math.round(r.width * scale)), h = Math.max(1, Math.round(r.height * scale));
       if (stage) stage.setSize(Math.round(r.width * dpr), Math.round(r.height * dpr)); else { canvas.width = Math.round(r.width * dpr); canvas.height = Math.round(r.height * dpr); }
-      scene.width = w; scene.height = h; topLayer.width = Math.round(r.width * Math.min(dpr, 1)); topLayer.height = Math.round(r.height * Math.min(dpr, 1));
+      // with the GPU stage the under layer only holds soft things (floor plants, shadows): a third of the size is plenty,
+      // and the shader softens it while sampling. That keeps the per-frame canvas copy small.
+      const us = stage ? UNDER_SCALE : 1;
+      scene.width = Math.max(1, Math.round(w * us)); scene.height = Math.max(1, Math.round(h * us)); topLayer.width = Math.round(r.width * Math.min(dpr, 1)); topLayer.height = Math.round(r.height * Math.min(dpr, 1));
       if (!pond) { pond = new Pond({ width: w, height: h, fish, fishSize, pads, petals, minnows, seed }); pond.rain = rainRef.current; pondRef.current = pond; }
       else if (w !== pond.w || h !== pond.h) pond.resize(w, h);
       sizeRef.current = { w, h };
@@ -180,11 +190,11 @@ export const KoiPond = forwardRef<KoiPondHandle, KoiPondProps>(function KoiPond(
       while (acc >= 1 / 60) { pond.step(1 / 60); acc -= 1 / 60; }
       if (stage) {
         const cssW = Math.round(canvas.width / dpr), cssH = Math.round(canvas.height / dpr);
-        drawUnder(sctx, pond, 0.8, false);
+        drawUnder(sctx, pond, 0.8, false, true);
         props3d?.render(pond, cssW, cssH, pond.border > 0 ? stonesFor(pond).stones : []);
-        drawTop(tctx, pond, props3d ? true : undefined);
+        if (sprites) sprites.render(pond, topLayer.width, topLayer.height); else drawTop(tctx, pond, props3d ? true : undefined);
         fish3d?.render(pond, cssW, cssH);
-        stage.render({ under: scene, top: topLayer, pond, look: themeRef.current, dpr, fish: fish3d?.texture ?? null, props: props3d?.texture ?? null, origin: lastTapRef.current });
+        stage.render({ under: scene, top: sprites ? sprites.texture : topLayer, pond, look: themeRef.current, dpr, fish: fish3d?.texture ?? null, props: props3d?.texture ?? null, origin: lastTapRef.current });
       }
       else { drawScene(sctx, pond); water!.render(scene, pond.w, pond.h, pond.ripples, pond.t, themeRef.current, dpr); }
       if (visible && !reduced) raf = requestAnimationFrame(loop);
@@ -202,7 +212,7 @@ export const KoiPond = forwardRef<KoiPondHandle, KoiPondProps>(function KoiPond(
       window.removeEventListener("pointerdown", onAnyDown);
       window.removeEventListener("wheel", onWheel); window.removeEventListener("touchmove", onTouchMove); window.removeEventListener("touchend", onTouchEnd);
       canvas.removeEventListener("pointermove", onMove); canvas.removeEventListener("pointerdown", onDown); window.removeEventListener("pointerup", onUp);
-      pondRef.current = null; fish3d?.dispose(); props3d?.dispose(); stage?.dispose();
+      pondRef.current = null; fish3d?.dispose(); props3d?.dispose(); sprites?.dispose(); stage?.dispose();
     };
   }, [minnows, seed, interactive, scale, scrollCurrent]); // eslint-disable-line react-hooks/exhaustive-deps
 

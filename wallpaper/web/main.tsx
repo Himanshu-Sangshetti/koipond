@@ -1,8 +1,8 @@
 // The pond as a desktop wallpaper. The native app (Mac / Windows) loads this page behind the desktop
 // icons, lets clicks pass through to the desktop, and forwards the real mouse to us through `koi.*`.
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { KoiPond } from "koipond";
+import { KoiPond, type KoiPondHandle } from "koipond";
 
 type Settings = { look: "natural" | "ink" | "violet"; fish: number; rain: number; pads: boolean; petals: boolean; fps: number; paused: boolean; dpr?: number };
 const DEFAULTS: Settings = { look: "natural", fish: 14, rain: 0.5, pads: true, petals: true, fps: 60, paused: false };
@@ -17,6 +17,7 @@ declare global {
       up(x: number, y: number): void;
       leave(): void;
       wheel(dx: number, dy: number): void;
+      gather(): void;
     };
   }
 }
@@ -51,6 +52,7 @@ const ptr = (type: string, x: number, y: number, buttons = 0) => {
   (type === "pointerup" ? window : canvas())?.dispatchEvent(new PointerEvent(type, init));
 };
 
+let pond: KoiPondHandle | null = null;
 const listeners = new Set<(s: Settings) => void>();
 window.koi = {
   set(s) {
@@ -64,14 +66,20 @@ window.koi = {
   up: (x, y) => ptr("pointerup", x, y),
   leave: () => canvas()?.dispatchEvent(new PointerEvent("pointerleave", { pointerType: "mouse" })),
   wheel: (dx, dy) => { lastTouch = performance.now(); window.dispatchEvent(new WheelEvent("wheel", { deltaX: dx, deltaY: dy })); },
+  // a focus session ended: rings spread from the middle and the koi gather there
+  gather: () => { pond?.ripple(0.5, 0.5); pond?.feed(0.5, 0.5); },
 };
 
 function Wallpaper() {
   const [s, setS] = useState(settings);
+  const ref = useRef<KoiPondHandle>(null);
+  useEffect(() => { pond = ref.current; });
   useEffect(() => { listeners.add(setS); return () => { listeners.delete(setS); }; }, []);
   return (
     <KoiPond
+      ref={ref}
       look={s.look}
+      fishSize={s.size ?? 0.18}
       fish={s.fish}
       rain={s.rain}
       pads={s.pads ? 4 : 0}

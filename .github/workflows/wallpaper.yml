@@ -34,13 +34,13 @@ jobs:
         with: { dotnet-version: "8.0.x" }
       - run: npm ci --ignore-scripts
         working-directory: wallpaper
-      - run: npx vite build
+      - run: npm run build:web
         working-directory: wallpaper
       - shell: pwsh
         working-directory: wallpaper
         run: |
           New-Item -ItemType Directory -Force windows/web | Out-Null
-          Copy-Item build/web/index.html windows/web/index.html
+          Copy-Item build/web/*.html windows/web/
           dotnet publish windows/koipond.csproj -c Release -o build/windows
           Compress-Archive -Path build/windows/* -DestinationPath build/koipond-windows.zip
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2

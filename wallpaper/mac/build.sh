@@ -15,7 +15,7 @@ done
 lipo -create build/koipond-arm64 build/koipond-x86_64 -output "$OUT/Contents/MacOS/koipond"
 rm build/koipond-arm64 build/koipond-x86_64
 
-cp build/web/index.html "$OUT/Contents/Resources/web/index.html"
+cp build/web/*.html "$OUT/Contents/Resources/web/"
 sed "s/__VERSION__/$VERSION/g" mac/Info.plist > "$OUT/Contents/Info.plist"
 
 # app icon from the demo's icon

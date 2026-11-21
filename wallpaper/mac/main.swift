@@ -19,6 +19,10 @@ struct Settings: Codable {
     var interactive = true
     var paused = false
     var quality = "balanced"   // smooth (60 fps) · balanced (30 fps) · saver (20 fps, lower resolution)
+    var size = 0.18
+    var rainAmount = 0.5
+    var showIcon = true
+    var music = "playlist/6jTot6wOCMCSfAnvg6WL5A"
 
     init() {}
     // older saves miss newer fields: keep what is there, default the rest
@@ -32,6 +36,10 @@ struct Settings: Codable {
         interactive = (try? c.decode(Bool.self, forKey: .interactive)) ?? z.interactive
         paused = (try? c.decode(Bool.self, forKey: .paused)) ?? z.paused
         quality = (try? c.decode(String.self, forKey: .quality)) ?? z.quality
+        size = (try? c.decode(Double.self, forKey: .size)) ?? z.size
+        rainAmount = (try? c.decode(Double.self, forKey: .rainAmount)) ?? z.rainAmount
+        showIcon = (try? c.decode(Bool.self, forKey: .showIcon)) ?? z.showIcon
+        music = (try? c.decode(String.self, forKey: .music)) ?? z.music
     }
 
     static let key = "settings"
@@ -115,9 +123,47 @@ final class PondWindow: NSWindow {
     }
 }
 
+// MARK: - the pop-up panel (looks, timer, music, settings)
+
+final class PanelWindow: NSPanel {
+    let web: WKWebView
+    override var canBecomeKey: Bool { true }
+
+    init(page: URL, handler: WKScriptMessageHandler) {
+        let size = NSSize(width: 340, height: 650)
+        let config = WKWebViewConfiguration()
+        config.userContentController.add(handler, name: "koi")
+        config.preferences.setValue(true, forKey: "developerExtrasEnabled")
+        config.mediaTypesRequiringUserActionForPlayback = []
+        web = WKWebView(frame: NSRect(origin: .zero, size: size), configuration: config)
+        web.setValue(false, forKey: "drawsBackground")
+        web.autoresizingMask = [.width, .height]
+        super.init(contentRect: NSRect(origin: .zero, size: size), styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
+        isOpaque = false
+        backgroundColor = .clear
+        hasShadow = true
+        level = .statusBar
+        collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .ignoresCycle]
+        isReleasedWhenClosed = false
+        hidesOnDeactivate = false
+        // a real frosted backdrop under the page, with rounded corners
+        let blur = NSVisualEffectView(frame: NSRect(origin: .zero, size: size))
+        blur.material = .hudWindow; blur.blendingMode = .behindWindow; blur.state = .active
+        blur.wantsLayer = true; blur.layer?.cornerRadius = 18; blur.layer?.masksToBounds = true
+        blur.autoresizingMask = [.width, .height]
+        blur.addSubview(web)
+        contentView = blur
+        web.loadFileURL(page, allowingReadAccessTo: page.deletingLastPathComponent())
+    }
+
+    func js(_ s: String) { web.evaluateJavaScript(s, completionHandler: nil) }
+}
+
+struct FocusTimer { var mode = "focus"; var left = 25 * 60; var running = false }
+
 // MARK: - app
 
-final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
+final class App: NSObject, NSApplicationDelegate, NSMenuDelegate, WKScriptMessageHandler {
     var settings = Settings.load()
     var windows: [PondWindow] = []
     var status: NSStatusItem!
@@ -129,6 +175,11 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
     var coverCache: (at: TimeInterval, point: NSPoint, covered: Bool) = (0, .zero, true)
     var hiddenBySystem = false   // screen asleep / locked / desktop occluded
     var monitors: [Any] = []
+    var panel: PanelWindow?
+    var menu = NSMenu()
+    var focus = FocusTimer()
+    var tick: Timer?
+    var edgeSince: TimeInterval? = nil
 
     func applicationDidFinishLaunching(_ n: Notification) {
         guard let p = Bundle.main.url(forResource: "index", withExtension: "html", subdirectory: "web") else {
@@ -137,6 +188,13 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
         page = p
         buildWindows()
         buildMenu()
+        if let pp = Bundle.main.url(forResource: "panel", withExtension: "html", subdirectory: "web") {
+            panel = PanelWindow(page: pp, handler: self)
+            NotificationCenter.default.addObserver(self, selector: #selector(panelLostFocus), name: NSWindow.didResignKeyNotification, object: panel)
+        }
+        if ProcessInfo.processInfo.environment["KOI_PANEL"] != nil { DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { _ = self.applicationShouldHandleReopen(NSApp, hasVisibleWindows: false) } }
+        tick = Timer(timeInterval: 1, repeats: true) { [weak self] _ in self?.timerTick() }
+        RunLoop.main.add(tick!, forMode: .common)
 
         // the mouse: polled for position and buttons (no permissions needed); scroll from a global monitor
         if debug {
@@ -204,7 +262,7 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let dpr = env["KOI_DPR"] ?? (level == 0 ? "1.25" : "0")
         let scale = env["KOI_SCALE"] ?? "1"
         let paused = settings.paused || hiddenBySystem
-        return "{\"look\":\"\(settings.look)\",\"fish\":\(settings.fish),\"rain\":\(settings.rain ? 0.5 : 0),\"pads\":\(settings.pads),\"petals\":\(settings.petals),\"fps\":\(fps),\"paused\":\(paused),\"dpr\":\(dpr),\"scale\":\(scale)\(env["KOI_EXTRA"].map { "," + $0 } ?? "")}"
+        return "{\"look\":\"\(settings.look)\",\"fish\":\(settings.fish),\"rain\":\(settings.rain ? settings.rainAmount : 0),\"size\":\(settings.size),\"pads\":\(settings.pads),\"petals\":\(settings.petals),\"fps\":\(fps),\"paused\":\(paused),\"dpr\":\(dpr),\"scale\":\(scale)\(env["KOI_EXTRA"].map { "," + $0 } ?? "")}"
     }
 
     @objc func pushSettings() {
@@ -256,8 +314,9 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     func pollMouse() {
-        guard settings.interactive, !settings.paused, !hiddenBySystem else { return }
         let p = NSEvent.mouseLocation
+        edgeReveal(p)
+        guard settings.interactive, !settings.paused, !hiddenBySystem else { return }
         let down = NSEvent.pressedMouseButtons & 1 == 1
         let moved = p != lastMouse
         if !moved && down == wasDown { return }
@@ -278,6 +337,21 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
         wasDown = down
     }
 
+    /// Resting the cursor on the right edge of the desktop slides the panel out.
+    func edgeReveal(_ p: NSPoint) {
+        guard let panel, !panel.isVisible, let scr = NSScreen.screens.first(where: { NSMouseInRect(p, $0.frame, false) }) else { edgeSince = nil; return }
+        let atEdge = p.x >= scr.frame.maxX - 2 && p.y > scr.frame.minY + 40 && p.y < scr.visibleFrame.maxY - 20
+        if !atEdge || NSEvent.pressedMouseButtons != 0 || covered(p) { edgeSince = nil; return }
+        let now = ProcessInfo.processInfo.systemUptime
+        if edgeSince == nil { edgeSince = now }
+        if now - edgeSince! > 0.45 {
+            edgeSince = nil
+            let f = panel.frame.size
+            let y = min(max(p.y - f.height / 2, scr.visibleFrame.minY + 8), scr.visibleFrame.maxY - f.height - 8)
+            showPanel(at: NSPoint(x: scr.frame.maxX - f.width - 10, y: y), slideFrom: scr.frame.maxX)
+        }
+    }
+
     func scroll(_ e: NSEvent) {
         guard settings.interactive, let w = overWindow else { return }
         let k: CGFloat = e.hasPreciseScrollingDeltas ? 1 : 12
@@ -292,16 +366,124 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
             img.isTemplate = true
             status.button?.image = img
         } else { status.button?.title = "鯉" }
-        let menu = NSMenu()
         menu.delegate = self
-        status.menu = menu
+        // click: the panel; right-click (or control-click): the menu
+        status.button?.target = self
+        status.button?.action = #selector(statusClicked)
+        status.button?.sendAction(on: [.leftMouseUp, .rightMouseUp])
+        status.isVisible = settings.showIcon
+    }
+
+    @objc func statusClicked() {
+        let e = NSApp.currentEvent
+        if e?.type == .rightMouseUp || e?.modifierFlags.contains(.control) == true {
+            status.menu = menu; status.button?.performClick(nil); status.menu = nil
+            return
+        }
+        if panel?.isVisible == true { hidePanel(); return }
+        guard let b = status.button, let bw = b.window, let panel else { return }
+        let r = bw.convertToScreen(b.convert(b.bounds, to: nil)), f = panel.frame.size
+        let scr = bw.screen ?? NSScreen.main!
+        let x = min(r.midX - f.width / 2, scr.visibleFrame.maxX - f.width - 8)
+        showPanel(at: NSPoint(x: x, y: r.minY - f.height - 6), slideFrom: nil)
+    }
+
+    // MARK: panel
+
+    func showPanel(at origin: NSPoint, slideFrom edgeX: CGFloat?) {
+        guard let panel else { return }
+        syncPanel()
+        let end = NSRect(origin: origin, size: panel.frame.size)
+        panel.setFrame(edgeX.map { NSRect(x: $0, y: origin.y, width: end.width, height: end.height) } ?? end.offsetBy(dx: 0, dy: 8), display: false)
+        panel.alphaValue = 0
+        NSApp.activate(ignoringOtherApps: true)
+        panel.makeKeyAndOrderFront(nil)
+        NSAnimationContext.runAnimationGroup { c in
+            c.duration = 0.22; c.timingFunction = CAMediaTimingFunction(name: .easeOut)
+            panel.animator().setFrame(end, display: true); panel.animator().alphaValue = 1
+        }
+    }
+
+    func hidePanel() {
+        guard let panel, panel.isVisible else { return }
+        NSAnimationContext.runAnimationGroup({ c in c.duration = 0.15; panel.animator().alphaValue = 0 }, completionHandler: { panel.orderOut(nil) })
+    }
+
+    @objc func panelLostFocus() { hidePanel() }
+
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        // opening the app again (Spotlight, Finder) brings the panel up, even with the menu bar icon hidden
+        if let scr = NSScreen.main, let panel { let f = panel.frame.size; showPanel(at: NSPoint(x: scr.visibleFrame.maxX - f.width - 10, y: scr.visibleFrame.maxY - f.height - 8), slideFrom: nil) }
+        return false
+    }
+
+    func syncPanel() {
+        let s: [String: Any] = ["look": settings.look, "fish": settings.fish, "size": settings.size, "rain": settings.rain, "rainAmount": settings.rainAmount,
+                                "pads": settings.pads, "petals": settings.petals, "interactive": settings.interactive, "quality": settings.quality,
+                                "login": loginEnabled, "showIcon": settings.showIcon]
+        let state: [String: Any] = ["settings": s, "timer": ["mode": focus.mode, "left": focus.left, "running": focus.running], "music": settings.music]
+        if let d = try? JSONSerialization.data(withJSONObject: state), let j = String(data: d, encoding: .utf8) { panel?.js("window.panel && panel.sync(\(j))") }
+    }
+
+    func userContentController(_ c: WKUserContentController, didReceive m: WKScriptMessage) {
+        guard let b = m.body as? [String: Any], let t = b["t"] as? String else { return }
+        switch t {
+        case "ready": syncPanel()
+        case "close": hidePanel()
+        case "quit": NSApp.terminate(nil)
+        case "music": if let v = b["v"] as? String { settings.music = v; settings.save(); syncPanel() }
+        case "timer":
+            if b["a"] as? String == "reset" { focus = FocusTimer() } else { focus.running.toggle() }
+            showCountdown(); syncPanel()
+        case "set":
+            guard let k = b["k"] as? String else { return }
+            let v = b["v"]
+            switch k {
+            case "look": settings.look = v as? String ?? settings.look
+            case "fish": settings.fish = (v as? NSNumber)?.intValue ?? settings.fish
+            case "size": settings.size = (v as? NSNumber)?.doubleValue ?? settings.size
+            case "rainAmount": settings.rainAmount = (v as? NSNumber)?.doubleValue ?? settings.rainAmount; settings.rain = settings.rainAmount > 0.001
+            case "pads": settings.pads = v as? Bool ?? settings.pads
+            case "petals": settings.petals = v as? Bool ?? settings.petals
+            case "interactive": settings.interactive = v as? Bool ?? settings.interactive; if !settings.interactive { windows.forEach { $0.js("koi.leave()") } }
+            case "login": toggleLogin()
+            case "showIcon": settings.showIcon = v as? Bool ?? settings.showIcon; status.isVisible = settings.showIcon
+            case "quality": settings.quality = v as? String ?? settings.quality; settings.save(); buildWindows(); syncPanel(); return
+            default: return
+            }
+            changed(); syncPanel()
+        default: break
+        }
+    }
+
+    // MARK: focus timer (25 min focus, 5 min break)
+
+    func timerTick() {
+        guard focus.running else { return }
+        focus.left -= 1
+        if focus.left <= 0 {
+            // a session is over: rings spread from the middle of the pond and the koi gather there
+            windows.forEach { $0.js("koi.gather && koi.gather()") }
+            focus = focus.mode == "focus" ? FocusTimer(mode: "break", left: 5 * 60, running: true) : FocusTimer()
+        }
+        showCountdown()
+        if panel?.isVisible == true { syncPanel() }
+    }
+
+    func showCountdown() {
+        guard let b = status.button else { return }
+        if focus.running || focus.left != 25 * 60 {
+            status.length = NSStatusItem.variableLength
+            b.imagePosition = .imageLeft
+            b.font = NSFont.monospacedDigitSystemFont(ofSize: 12, weight: .regular)
+            b.title = String(format: " %02d:%02d", focus.left / 60, focus.left % 60)
+        } else { b.title = ""; status.length = NSStatusItem.squareLength }
     }
 
     func menuNeedsUpdate(_ menu: NSMenu) {
         menu.removeAllItems()
-        let title = NSMenuItem(title: "koipond", action: nil, keyEquivalent: "")
-        title.isEnabled = false
-        menu.addItem(title)
+        menu.addItem(item("Open panel", #selector(openPanelFromMenu), on: false))
+        menu.addItem(item(focus.running ? "Pause focus timer" : "Start focus timer", #selector(toggleFocus), on: false))
         menu.addItem(.separator())
 
         for (id, name) in [("natural", "Natural"), ("ink", "Ink"), ("violet", "Dither")] {
@@ -337,7 +519,7 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
         return i
     }
 
-    func changed() { settings.save(); pushSettings() }
+    func changed() { settings.save(); pushSettings(); syncPanel() }
 
     @objc func setLook(_ i: NSMenuItem) { settings.look = i.representedObject as! String; changed() }
     @objc func setFish(_ i: NSMenuItem) { settings.fish = i.representedObject as! Int; changed() }
@@ -353,12 +535,14 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
         changed()
     }
     @objc func setQuality(_ i: NSMenuItem) {
-        settings.quality = i.representedObject as! String; settings.save()
+        settings.quality = i.representedObject as! String; settings.save(); syncPanel()
         // resolution is read once when the page starts, so reload the ponds
         buildWindows()
     }
         @objc func togglePause() { settings.paused.toggle(); changed() }
     @objc func quit() { NSApp.terminate(nil) }
+    @objc func openPanelFromMenu() { DispatchQueue.main.async { self.statusClicked() } }
+    @objc func toggleFocus() { focus.running.toggle(); showCountdown(); syncPanel() }
 
     // MARK: open at login
 
@@ -367,6 +551,7 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
     @objc func toggleLogin() {
         do {
             if loginEnabled { try SMAppService.mainApp.unregister() } else { try SMAppService.mainApp.register() }
+            syncPanel()
         } catch {
             let a = NSAlert()
             a.messageText = "Couldn't change Open at login"

@@ -6,6 +6,8 @@ Glide over it and you leave a wake; tap it and it splashes; double-tap and the k
 
 ![koipond: tap the water, the koi come to look](media/demo.gif)
 
+**[Try it live →](https://koipond-demo.vercel.app)**
+
 ## Install
 
 **shadcn** (recommended): copies the source into your project, so it's yours to edit.

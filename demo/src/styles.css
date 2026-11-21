@@ -1,0 +1,43 @@
+* { box-sizing: border-box; }
+html, body, #root { margin: 0; height: 100%; background: #05040a; color: #fff; font-family: Geist, ui-sans-serif, system-ui, sans-serif; overflow: hidden; }
+button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; }
+.pond { position: fixed; inset: 0; }
+.title { position: fixed; left: 28px; bottom: 26px; pointer-events: none; }
+.title h1 { margin: 0; font: 400 34px/1 Anton, Impact, sans-serif; letter-spacing: .01em; text-transform: uppercase; text-shadow: 0 2px 12px rgba(0,0,0,.35); }
+.title p { margin: 8px 0 0; font: 12px "Geist Mono", ui-monospace, monospace; color: rgba(255,255,255,.75); transition: opacity 1s; text-shadow: 0 1px 6px rgba(0,0,0,.4); }
+.links { position: fixed; left: 28px; top: 24px; display: flex; gap: 8px; }
+.links a { padding: 7px 12px; border-radius: 11px; font-size: 12px; color: rgba(255,255,255,.8); text-decoration: none; background: rgba(0,0,0,.25); border: 1px solid rgba(255,255,255,.1); backdrop-filter: blur(16px); transition: background .2s; }
+.links a:hover { background: rgba(0,0,0,.45); color: #fff; }
+.switch { position: fixed; right: 28px; top: 24px; display: flex; gap: 4px; padding: 4px; border-radius: 14px; background: rgba(0,0,0,.25); border: 1px solid rgba(255,255,255,.1); backdrop-filter: blur(16px); }
+.switch button { display: flex; align-items: center; gap: 8px; padding: 4px 12px 4px 4px; border-radius: 11px; font-size: 12px; color: rgba(255,255,255,.55); transition: background .2s, color .2s; }
+.switch button:hover { color: rgba(255,255,255,.85); }
+.switch button.on { background: rgba(255,255,255,.12); color: #fff; }
+.switch img { width: 24px; height: 24px; border-radius: 7px; object-fit: cover; opacity: .7; outline: 1px solid rgba(255,255,255,.1); }
+.switch button.on img { opacity: 1; outline-color: rgba(255,255,255,.6); }
+.settings { position: fixed; right: 28px; bottom: 26px; display: flex; flex-direction: column; align-items: flex-end; gap: 12px; }
+.panel { width: 248px; padding: 16px; border-radius: 16px; background: rgba(7,18,22,.75); border: 1px solid rgba(255,255,255,.1); backdrop-filter: blur(24px); box-shadow: 0 20px 50px rgba(0,0,0,.35); transform-origin: bottom right; transition: opacity .3s, transform .3s; }
+.panel.closed { opacity: 0; transform: scale(.95); pointer-events: none; }
+.slider { display: block; margin-bottom: 16px; }
+.slider .row { display: flex; justify-content: space-between; font-size: 12px; color: rgba(255,255,255,.7); }
+.slider .row span:last-child { font: 11px "Geist Mono", monospace; color: rgba(255,255,255,.4); }
+.slider .track { position: relative; height: 16px; margin-top: 8px; }
+.slider .bar, .slider .fill { position: absolute; top: 50%; height: 3px; transform: translateY(-50%); border-radius: 3px; }
+.slider .bar { left: 0; right: 0; background: rgba(255,255,255,.12); }
+.slider .fill { left: 0; background: rgba(255,255,255,.8); }
+.slider .knob { position: absolute; top: 50%; width: 12px; height: 12px; border-radius: 50%; background: #fff; transform: translate(-50%,-50%); box-shadow: 0 0 0 4px rgba(255,255,255,.08); }
+.slider input { position: absolute; inset: 0; width: 100%; opacity: 0; cursor: pointer; margin: 0; }
+.toggles { display: flex; gap: 8px; }
+.toggle { flex: 1; display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; border-radius: 12px; background: rgba(255,255,255,.06); font-size: 12px; color: rgba(255,255,255,.75); }
+.toggle .sw { position: relative; width: 28px; height: 16px; border-radius: 9px; background: rgba(255,255,255,.15); transition: background .2s; }
+.toggle .sw::after { content: ""; position: absolute; top: 2px; left: 2px; width: 12px; height: 12px; border-radius: 50%; background: rgba(255,255,255,.7); transition: left .2s, background .2s; }
+.toggle.on .sw { background: rgba(255,255,255,.85); }
+.toggle.on .sw::after { left: 14px; background: #06141a; }
+.reset { display: block; width: 100%; margin-top: 12px; font-size: 11px; color: rgba(255,255,255,.35); }
+.reset:hover { color: rgba(255,255,255,.7); }
+.gear { width: 44px; height: 44px; display: grid; place-items: center; border-radius: 50%; background: rgba(0,0,0,.3); border: 1px solid rgba(255,255,255,.15); backdrop-filter: blur(16px); }
+.gear svg { width: 20px; height: 20px; transition: transform .3s; }
+.gear.open svg { transform: rotate(90deg); }
+@media (max-width: 640px) {
+  .switch { right: 12px; top: 12px; } .switch button { padding-right: 8px; } .switch .label { display: none; }
+  .links { left: 12px; top: 12px; } .title { left: 16px; bottom: 18px; } .settings { right: 12px; bottom: 16px; }
+}

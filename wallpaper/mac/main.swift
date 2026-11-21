@@ -153,10 +153,19 @@ final class PanelWindow: NSPanel {
         blur.autoresizingMask = [.width, .height]
         blur.addSubview(web)
         contentView = blur
+        web.uiDelegate = self
         web.loadFileURL(page, allowingReadAccessTo: page.deletingLastPathComponent())
     }
 
     func js(_ s: String) { web.evaluateJavaScript(s, completionHandler: nil) }
+}
+
+extension PanelWindow: WKUIDelegate {
+    // links that open a new window (Spotify's logo, "play on Spotify") go to the browser or the Spotify app
+    func webView(_ w: WKWebView, createWebViewWith c: WKWebViewConfiguration, for a: WKNavigationAction, windowFeatures f: WKWindowFeatures) -> WKWebView? {
+        if let u = a.request.url { NSWorkspace.shared.open(u) }
+        return nil
+    }
 }
 
 struct FocusTimer { var mode = "focus"; var left = 25 * 60; var running = false }
@@ -186,6 +195,14 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate, WKScriptMessag
             NSLog("koipond: page missing from the app bundle"); NSApp.terminate(nil); return
         }
         page = p
+        // a menu-bar app has no main menu, and without an Edit menu Cmd+V/C/X/A do nothing in text fields
+        let main = NSMenu(), editItem = NSMenuItem(), edit = NSMenu(title: "Edit")
+        edit.addItem(withTitle: "Undo", action: Selector(("undo:")), keyEquivalent: "z")
+        edit.addItem(withTitle: "Cut", action: #selector(NSText.cut(_:)), keyEquivalent: "x")
+        edit.addItem(withTitle: "Copy", action: #selector(NSText.copy(_:)), keyEquivalent: "c")
+        edit.addItem(withTitle: "Paste", action: #selector(NSText.paste(_:)), keyEquivalent: "v")
+        edit.addItem(withTitle: "Select All", action: #selector(NSText.selectAll(_:)), keyEquivalent: "a")
+        editItem.submenu = edit; main.addItem(editItem); NSApp.mainMenu = main
         buildWindows()
         buildMenu()
         if let pp = Bundle.main.url(forResource: "panel", withExtension: "html", subdirectory: "web") {
@@ -338,7 +355,14 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate, WKScriptMessag
     }
 
     /// Resting the cursor on the right edge of the desktop slides the panel out.
+    var edgeNear: Double = -1
     func edgeReveal(_ p: NSPoint) {
+        // the handle on the right edge brightens as the cursor comes within ~140 pt
+        if let scr = NSScreen.screens.first(where: { NSMouseInRect(p, $0.frame, false) }) {
+            let near = max(0, 1 - Double(scr.frame.maxX - p.x) / 140)
+            let q = (near * 20).rounded() / 20
+            if q != edgeNear { edgeNear = q; windows.forEach { $0.js("koi.edge && koi.edge(\($0.screenRef == scr ? q : 0))") } }
+        }
         guard let panel, !panel.isVisible, let scr = NSScreen.screens.first(where: { NSMouseInRect(p, $0.frame, false) }) else { edgeSince = nil; return }
         let atEdge = p.x >= scr.frame.maxX - 2 && p.y > scr.frame.minY + 40 && p.y < scr.visibleFrame.maxY - 20
         if !atEdge || NSEvent.pressedMouseButtons != 0 || covered(p) { edgeSince = nil; return }
@@ -430,6 +454,7 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate, WKScriptMessag
         switch t {
         case "ready": syncPanel()
         case "close": hidePanel()
+        case "open": if let u = (b["v"] as? String).flatMap(URL.init(string:)), ["https", "spotify"].contains(u.scheme ?? "") { NSWorkspace.shared.open(u); hidePanel() }
         case "quit": NSApp.terminate(nil)
         case "music": if let v = b["v"] as? String { settings.music = v; settings.save(); syncPanel() }
         case "timer":

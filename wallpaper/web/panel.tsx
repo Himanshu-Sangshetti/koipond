@@ -43,14 +43,21 @@ const Toggle = ({ label, on, onClick }: { label: string; on: boolean; onClick: (
 function Panel() {
   const [st, setSt] = useState(current);
   const [link, setLink] = useState("");
+  const [bad, setBad] = useState(false);
+  const [stars, setStars] = useState<number | null>(null);
+  useEffect(() => {
+    fetch("https://api.github.com/repos/Himanshu-Sangshetti/koipond").then((r) => (r.ok ? r.json() : null)).then((d) => d && setStars(d.stargazers_count)).catch(() => {});
+  }, []);
   useEffect(() => { listeners.add(setSt); send({ t: "ready" }); return () => { listeners.delete(setSt); }; }, []);
   useEffect(() => { const k = (e: KeyboardEvent) => e.key === "Escape" && send({ t: "close" }); addEventListener("keydown", k); return () => removeEventListener("keydown", k); }, []);
   const s = st.settings, t = st.timer;
   const mmss = `${String(Math.floor(t.left / 60)).padStart(2, "0")}:${String(t.left % 60).padStart(2, "0")}`;
+  // any Spotify link or URI: playlist, album, song, artist, podcast
   const playLink = () => {
-    const m = link.match(/open\.spotify\.com\/(?:intl-[a-z]+\/)?(playlist|album|track|artist|episode|show)\/([A-Za-z0-9]+)/);
-    if (m) { send({ t: "music", v: `${m[1]}/${m[2]}` }); setLink(""); }
+    const m = link.match(/open\.spotify\.com\/(?:intl-[a-z]+\/)?(playlist|album|track|artist|episode|show)\/([A-Za-z0-9]+)/) ?? link.match(/spotify:(playlist|album|track|artist|episode|show):([A-Za-z0-9]+)/);
+    if (m) { send({ t: "music", v: `${m[1]}/${m[2]}` }); setLink(""); setBad(false); } else setBad(true);
   };
+  const kind = ({ playlist: "Playlist", album: "Album", track: "Song", artist: "Artist", episode: "Episode", show: "Podcast" } as Record<string, string>)[st.music.split("/")[0]] ?? "Music";
   return (
     <div className="sheet">
       <div>
@@ -77,11 +84,13 @@ function Panel() {
       </div>
 
       <div className="card music">
+        <p className="label">{kind} playing</p>
         <iframe title="Spotify" src={`https://open.spotify.com/embed/${st.music}?utm_source=generator&theme=0`} allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture" />
         <div className="mlink">
-          <input value={link} onChange={(e) => setLink(e.target.value)} onKeyDown={(e) => e.key === "Enter" && playLink()} placeholder="paste a Spotify link" aria-label="Spotify link" />
+          <input value={link} onChange={(e) => { setLink(e.target.value); setBad(false); }} onKeyDown={(e) => e.key === "Enter" && playLink()} placeholder="Spotify playlist, album or song link" aria-label="Spotify link" />
           <button onClick={playLink}>Play</button>
         </div>
+        <p className="hint">{bad ? "That doesn't look like a Spotify link. Copy it from Share → Copy link." : "Plays 30-second previews here. Tap the Spotify logo to play the full thing in Spotify."}</p>
       </div>
 
       <div>
@@ -104,6 +113,11 @@ function Panel() {
           ))}
         </div>
       </div>
+
+      <button className="star" onClick={() => send({ t: "open", v: "https://github.com/Himanshu-Sangshetti/koipond" })}>
+        <svg viewBox="0 0 16 16" width="14" height="14" fill="currentColor" aria-hidden><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+        <span>koipond is free. Star it on GitHub</span>{stars !== null && <span className="count">★ {stars}</span>}
+      </button>
 
       <div className="foot">
         <button onClick={() => set("showIcon", !s.showIcon)}>{s.showIcon ? "Hide menu bar icon" : "Show menu bar icon"}</button>

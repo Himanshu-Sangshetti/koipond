@@ -18,6 +18,7 @@ declare global {
       leave(): void;
       wheel(dx: number, dy: number): void;
       gather(): void;
+      edge(near: number): void;
     };
   }
 }
@@ -67,6 +68,8 @@ window.koi = {
   leave: () => canvas()?.dispatchEvent(new PointerEvent("pointerleave", { pointerType: "mouse" })),
   wheel: (dx, dy) => { lastTouch = performance.now(); window.dispatchEvent(new WheelEvent("wheel", { deltaX: dx, deltaY: dy })); },
   // a focus session ended: rings spread from the middle and the koi gather there
+  // the panel's hidden edge: a faint handle that wakes up as the cursor comes near
+  edge: (near) => { const h = document.getElementById("edge"); if (h) { h.style.opacity = String(0.22 + near * 0.6); h.style.transform = `translateY(-50%) scaleY(${1 + near * 0.5})`; } },
   gather: () => { pond?.ripple(0.5, 0.5); pond?.feed(0.5, 0.5); },
 };
 
@@ -76,6 +79,7 @@ function Wallpaper() {
   useEffect(() => { pond = ref.current; });
   useEffect(() => { listeners.add(setS); return () => { listeners.delete(setS); }; }, []);
   return (
+    <>
     <KoiPond
       ref={ref}
       look={s.look}
@@ -88,6 +92,8 @@ function Wallpaper() {
       water={{ caustics: 2.1, waves: 1.9 }}
       style={{ position: "fixed", inset: 0 }}
     />
+    <div id="edge" style={{ position: "fixed", right: 3, top: "50%", width: 4, height: 56, borderRadius: 3, background: "rgba(255,255,255,.9)", opacity: 0.22, transform: "translateY(-50%)", transition: "opacity .25s, transform .25s", pointerEvents: "none", boxShadow: "0 0 10px rgba(255,255,255,.25)" }} />
+    </>
   );
 }
 

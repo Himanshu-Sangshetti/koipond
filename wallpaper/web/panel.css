@@ -58,3 +58,10 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 
 .foot { display: flex; justify-content: space-between; align-items: center; color: rgba(255, 255, 255, .4); }
 .foot button:hover { color: #fff; }
+
+.hint { margin: 8px 2px 0; color: rgba(255, 255, 255, .4); font-size: 11px; line-height: 1.4; }
+.music .label { margin-bottom: 8px; }
+.star { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-radius: 12px; background: rgba(255, 255, 255, .06); color: rgba(255, 255, 255, .75); text-align: left; transition: background .2s; }
+.star:hover { background: rgba(255, 255, 255, .12); color: #fff; }
+.star span:first-of-type { flex: 1; }
+.star .count { font: 11px ui-monospace, Menlo, monospace; color: rgba(255, 255, 255, .5); }

@@ -40,8 +40,26 @@ export function App() {
   const playLink = () => { const m = link.match(/open\.spotify\.com\/(?:intl-[a-z]+\/)?(playlist|album|track|artist|episode|show)\/([A-Za-z0-9]+)/); if (m) { setEmbed(`${m[1]}/${m[2]}`); setLink(""); } };
   // pomodoro: 25 min focus, 5 min break
   const [timer, setTimer] = useState({ mode: "focus" as "focus" | "break", left: 25 * 60, running: false });
+  const rec = typeof window !== "undefined" && new URLSearchParams(location.search).has("rec");
+  const ringRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!rec) return;
+    const w = window as unknown as { __recTick?: (dt: number, x?: number, y?: number, press?: boolean) => void };
+    const tgt = { x: -100, y: -100 }, cur = { x: -100, y: -100, s: 1 }; let down = false, acc = 0;
+    addEventListener("pointermove", (e) => { tgt.x = e.clientX; tgt.y = e.clientY; if (cur.x < -50) { cur.x = tgt.x; cur.y = tgt.y; } });
+    addEventListener("pointerdown", () => (down = true)); addEventListener("pointerup", () => (down = false));
+    // the recorder calls this once per video frame: cursor easing and the timer follow video time
+    w.__recTick = (dt: number, x?: number, y?: number, press?: boolean) => {
+      // the recorder can drive the ring directly (pointer events do not leave the Spotify frame)
+      if (x !== undefined && y !== undefined) { tgt.x = x; tgt.y = y; if (cur.x < -50) { cur.x = x; cur.y = y; } down = !!press; }
+      const k = 1 - Math.exp(-dt * 14); cur.x += (tgt.x - cur.x) * k; cur.y += (tgt.y - cur.y) * k; cur.s += ((down ? 0.72 : 1) - cur.s) * (1 - Math.exp(-dt * 18));
+      if (ringRef.current) ringRef.current.style.transform = `translate(${cur.x}px, ${cur.y}px) translate(-50%, -50%) scale(${cur.s})`;
+      acc += dt; while (acc >= 1) { acc -= 1; setTimer((t) => (t.running ? { ...t, left: Math.max(0, t.left - 1) } : t)); }
+    };
+  }, [rec]);
   useEffect(() => {
     if (!timer.running) { document.title = "koipond"; return; }
+    if (rec) return;
     const id = setInterval(() => setTimer((t) => {
       if (t.left > 1) return { ...t, left: t.left - 1 };
       // the session is over: the koi gather and the water rings
@@ -49,7 +67,7 @@ export function App() {
       return t.mode === "focus" ? { mode: "break", left: 5 * 60, running: true } : { mode: "focus", left: 25 * 60, running: false };
     }), 1000);
     return () => clearInterval(id);
-  }, [timer.running]);
+  }, [timer.running, rec]);
   const mmss = `${String(Math.floor(timer.left / 60)).padStart(2, "0")}:${String(timer.left % 60).padStart(2, "0")}`;
   useEffect(() => { if (timer.running) document.title = `${mmss} · ${timer.mode} · koipond`; }, [mmss, timer.running, timer.mode]);
   useEffect(() => {
@@ -70,7 +88,8 @@ export function App() {
 
   return (
     <>
-      <KoiPond ref={pondRef} className="pond" look={look} fish={s.fish} fishSize={s.size} pads={s.pads ? 4 : 0} petals={s.petals ? 10 : 0} minnows={4} rain={s.rain} water={{ caustics: s.caustics, waves: s.waves }} />
+      {rec && <div ref={ringRef} style={{ position: "fixed", left: 0, top: 0, zIndex: 50, width: 30, height: 30, borderRadius: "50%", border: "1.5px solid rgba(255,255,255,.8)", boxShadow: "0 0 12px rgba(255,255,255,.15)", pointerEvents: "none", transform: "translate(-100px,-100px)" }} />}
+      <KoiPond ref={pondRef} cursor={!rec} className="pond" look={look} fish={s.fish} fishSize={s.size} pads={s.pads ? 4 : 0} petals={s.petals ? 10 : 0} minnows={4} rain={s.rain} water={{ caustics: s.caustics, waves: s.waves }} />
       {/* the music player stays mounted (keeps playing) in full screen */}
       <div className={`music ${music ? "" : "closed"}`}>
         <iframe title="Spotify" src={`https://open.spotify.com/embed/${embed}?utm_source=generator&theme=0`} width="100%" height="152" frameBorder={0} allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture" loading="lazy" />

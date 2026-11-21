@@ -79,3 +79,5 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 @media (min-width: 641px) and (max-width: 1100px) { .dock { bottom: 96px; } .music { bottom: 148px; } }
 /* short landscape screens: the timer sits beside the settings button instead */
 @media (max-height: 500px) { .dock { left: auto; right: 84px; bottom: 26px; transform: none; } .music { left: auto; right: 84px; bottom: 76px; transform: none; } .music.closed { transform: translateY(8px); } .title p { display: none; } }
+
+body.rec, body.rec * { cursor: none !important; }

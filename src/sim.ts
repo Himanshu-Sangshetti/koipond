@@ -111,13 +111,15 @@ export class Pond {
   keepClear: NonNullable<PondOptions["keepClear"]>;
   private rnd: Random;
   private nextId = 0;
+  private fishSizeRatio = 0.14;
   private unit: number;
   private nextDrop = 2;
   private formation: { slots: V[]; flow: V[]; owner: number[] } | null = null;
 
   constructor(o: PondOptions) {
     this.w = o.width; this.h = o.height; this.rnd = new Random(o.seed ?? 7);
-    this.unit = Math.min(o.width, o.height) * (o.fishSize ?? 0.14);
+    this.fishSizeRatio = o.fishSize ?? 0.14;
+    this.unit = Math.min(o.width, o.height) * this.fishSizeRatio;
     this.keepClear = o.keepClear ?? [];
     for (let i = 0; i < (o.fish ?? 9); i++) this.fish.push(this.makeFish(i));
     for (let i = 0; i < (o.minnows ?? 0); i++) {
@@ -236,7 +238,7 @@ export class Pond {
   }
 
   /** Change the pond while it lives: koi, size, pads and petals ease in or out instead of resetting. */
-  setFishSize(fishSize: number) { this.unit = Math.min(this.w, this.h) * fishSize; }
+  setFishSize(fishSize: number) { this.fishSizeRatio = fishSize; this.unit = Math.min(this.w, this.h) * fishSize; }
   setFishCount(n: number) {
     const koi = this.fish.filter((f) => f.variety !== MINNOW && !f.leaving);
     if (koi.length < n) {
@@ -256,6 +258,9 @@ export class Pond {
 
   resize(w: number, h: number) {
     const sx = w / this.w, sy = h / this.h;
+    // sizes follow the new screen (koi and pads ease to them); homes move with it
+    this.unit = Math.min(w, h) * this.fishSizeRatio;
+    for (const p of this.pads) { p.hx *= sx; p.hy *= sy; }
     for (const f of this.fish) { f.x *= sx; f.y *= sy; for (const j of [...f.joints, ...f.tail]) { j.x *= sx; j.y *= sy; } }
     for (const p of [...this.pads, ...this.petals]) { p.x *= sx; p.y *= sy; }
     this.w = w; this.h = h;

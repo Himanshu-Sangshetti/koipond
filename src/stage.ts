@@ -40,7 +40,7 @@ export function createStage(canvas: HTMLCanvasElement) {
 
   // 4. 2D layers as textures (uploaded each frame; no read-back)
   const mkCanvasTex = () => { const t = new THREE.Texture(); t.minFilter = THREE.LinearFilter; t.magFilter = THREE.LinearFilter; t.generateMipmaps = false; t.colorSpace = THREE.NoColorSpace; return t; };
-  const underTex = mkCanvasTex(), topTex = mkCanvasTex();
+  let underTex = mkCanvasTex(), topTex = mkCanvasTex(), underKey = "", topKey = "";
 
   // 5. composite
   const composeMat = new THREE.RawShaderMaterial({
@@ -107,6 +107,10 @@ export function createStage(canvas: HTMLCanvasElement) {
       }
       renderer.setRenderTarget(null);
       // layers
+      // three.js fixes a texture's size when it is first uploaded: after a resize, start fresh textures
+      const uk = `${o.under.width}x${o.under.height}`, tk = `${o.top.width}x${o.top.height}`;
+      if (uk !== underKey) { underTex.dispose(); underTex = mkCanvasTex(); composeMat.uniforms.fish.value = underTex; underKey = uk; }
+      if (tk !== topKey) { topTex.dispose(); topTex = mkCanvasTex(); composeMat.uniforms.top.value = topTex; topKey = tk; }
       underTex.image = o.under; underTex.needsUpdate = true;
       topTex.image = o.top; topTex.needsUpdate = true;
       const U = composeMat.uniforms, size = renderer.getDrawingBufferSize(new THREE.Vector2());

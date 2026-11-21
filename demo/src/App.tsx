@@ -8,7 +8,7 @@ const STYLES = [
 ] as const;
 type StyleId = (typeof STYLES)[number]["id"];
 type Settings = { fish: number; size: number; caustics: number; waves: number; rain: number; pads: boolean; petals: boolean };
-const DEFAULTS: Settings = { fish: 15, size: 0.18, caustics: 2.1, waves: 1.9, rain: 0.65, pads: true, petals: true };
+const DEFAULTS: Settings = { fish: 18, size: 0.18, caustics: 2.1, waves: 1.9, rain: 0.65, pads: true, petals: true };
 
 function Slider({ label, value, min, max, step, onChange }: { label: string; value: number; min: number; max: number; step: number; onChange: (v: number) => void }) {
   const pct = ((value - min) / (max - min)) * 100;
@@ -25,15 +25,17 @@ function Slider({ label, value, min, max, step, onChange }: { label: string; val
 
 export function App() {
   const [look, setLook] = useState<StyleId>("natural");
-  const [s, setS] = useState<Settings>(DEFAULTS);
+  // small screens get fewer koi so the pond doesn't feel crowded
+  const [s, setS] = useState<Settings>(() => ({ ...DEFAULTS, fish: typeof window !== "undefined" && Math.min(innerWidth, innerHeight) < 700 ? 9 : DEFAULTS.fish }));
   const [open, setOpen] = useState(false);
   const [hint, setHint] = useState(true);
+  const touch = typeof window !== "undefined" && window.matchMedia("(pointer: coarse)").matches;
   const [stars, setStars] = useState<number | null>(null);
   const [bare, setBare] = useState(false);       // full screen: only the pond
   const pondRef = useRef<KoiPondHandle>(null);
   // music: Spotify's own embedded player (no login needed; full tracks for signed-in Spotify users)
   const [music, setMusic] = useState(false);
-  const [embed, setEmbed] = useState("playlist/37i9dQZF1DX4sWSpwq3LiO");
+  const [embed, setEmbed] = useState("playlist/6jTot6wOCMCSfAnvg6WL5A");
   const [link, setLink] = useState("");
   const playLink = () => { const m = link.match(/open\.spotify\.com\/(?:intl-[a-z]+\/)?(playlist|album|track|artist|episode|show)\/([A-Za-z0-9]+)/); if (m) { setEmbed(`${m[1]}/${m[2]}`); setLink(""); } };
   // pomodoro: 25 min focus, 5 min break
@@ -63,15 +65,33 @@ export function App() {
     <>
       <KoiPond ref={pondRef} className="pond" look={look} fish={s.fish} fishSize={s.size} pads={s.pads ? 4 : 0} petals={s.petals ? 10 : 0} minnows={4} rain={s.rain} water={{ caustics: s.caustics, waves: s.waves }} />
       {/* the music player stays mounted (keeps playing) in full screen */}
-      <div className={`music ${music && !bare ? "" : "closed"}`}>
+      <div className={`music ${music ? "" : "closed"}`}>
         <iframe title="Spotify" src={`https://open.spotify.com/embed/${embed}?utm_source=generator&theme=0`} width="100%" height="152" frameBorder={0} allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture" loading="lazy" />
         <div className="mlink">
           <input value={link} onChange={(e) => setLink(e.target.value)} onKeyDown={(e) => e.key === "Enter" && playLink()} placeholder="paste a Spotify link" aria-label="Spotify link" />
           <button onClick={playLink}>Play</button>
         </div>
       </div>
+      {/* timer and music stay with you in full screen */}
+      <div className="dock">
+        <div className={`timer ${timer.running ? "on" : ""}`}>
+          <button className="tmain" onClick={() => setTimer((t) => ({ ...t, running: !t.running }))} aria-label={timer.running ? "Pause timer" : "Start timer"}>
+            <svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor">{timer.running ? <path d="M7 5h3v14H7zM14 5h3v14h-3z" /> : <path d="M8 5l11 7-11 7z" />}</svg>
+            <span className="tt">{mmss}</span><span className="tm">{timer.mode}</span>
+          </button>
+          <button className="treset" onClick={() => setTimer({ mode: "focus", left: 25 * 60, running: false })} aria-label="Reset timer">↺</button>
+        </div>
+        {bare && (
+          <button className="musicbtn" onClick={() => { if (document.fullscreenElement) document.exitFullscreen(); setBare(false); }} aria-label="Exit full screen">
+            <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5" /></svg>
+          </button>
+        )}
+        <button className={`musicbtn ${music ? "on" : ""}`} onClick={() => setMusic((m) => !m)} aria-label="Music">
+          <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M9 18V5l11-2v13" /><circle cx="6" cy="18" r="3" /><circle cx="17" cy="16" r="3" /></svg>
+        </button>
+      </div>
       {!bare && <>
-      <div className="title"><h1>koipond</h1><p style={{ opacity: hint ? 1 : 0 }}>glide · tap · double-tap to feed · scroll to stir</p></div>
+      <div className="title"><h1>koipond</h1><p style={{ opacity: hint ? 1 : 0 }}>{touch ? "tap · double-tap to feed · swipe to stir" : "glide · tap · double-tap to feed · scroll to stir"}</p></div>
       <nav className="links">
         <a href="https://github.com/Himanshu-Sangshetti/koipond" target="_blank" rel="noreferrer" aria-label="koipond on GitHub">
           <svg viewBox="0 0 16 16" width="15" height="15" fill="currentColor" aria-hidden><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
@@ -81,18 +101,6 @@ export function App() {
           <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" /></svg>
         </button>
       </nav>
-      <div className="dock">
-        <div className={`timer ${timer.running ? "on" : ""}`}>
-          <button className="tmain" onClick={() => setTimer((t) => ({ ...t, running: !t.running }))} aria-label={timer.running ? "Pause timer" : "Start timer"}>
-            <svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor">{timer.running ? <path d="M7 5h3v14H7zM14 5h3v14h-3z" /> : <path d="M8 5l11 7-11 7z" />}</svg>
-            <span className="tt">{mmss}</span><span className="tm">{timer.mode}</span>
-          </button>
-          <button className="treset" onClick={() => setTimer({ mode: "focus", left: 25 * 60, running: false })} aria-label="Reset timer">↺</button>
-        </div>
-        <button className={`musicbtn ${music ? "on" : ""}`} onClick={() => setMusic((m) => !m)} aria-label="Music">
-          <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M9 18V5l11-2v13" /><circle cx="6" cy="18" r="3" /><circle cx="17" cy="16" r="3" /></svg>
-        </button>
-      </div>
       <div className="switch">
         {STYLES.map((st) => (
           <button key={st.id} className={look === st.id ? "on" : ""} onClick={() => setLook(st.id)} title={st.label}>

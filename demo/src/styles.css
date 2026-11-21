@@ -14,7 +14,9 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 .switch button.on { background: rgba(255,255,255,.12); color: #fff; }
 .switch img { width: 24px; height: 24px; border-radius: 7px; object-fit: cover; opacity: .7; outline: 1px solid rgba(255,255,255,.1); }
 .switch button.on img { opacity: 1; outline-color: rgba(255,255,255,.6); }
-.settings { position: fixed; right: 28px; bottom: 26px; display: flex; flex-direction: column; align-items: flex-end; gap: 12px; }
+.settings { position: fixed; right: 28px; bottom: 26px; display: flex; flex-direction: column; align-items: flex-end; gap: 12px; pointer-events: none; }
+.settings > * { pointer-events: auto; }
+.settings > .panel.closed { pointer-events: none; }
 .panel { width: 248px; padding: 16px; border-radius: 16px; background: rgba(7,18,22,.75); border: 1px solid rgba(255,255,255,.1); backdrop-filter: blur(24px); box-shadow: 0 20px 50px rgba(0,0,0,.35); transform-origin: bottom right; transition: opacity .3s, transform .3s; }
 .panel.closed { opacity: 0; transform: scale(.95); pointer-events: none; }
 .slider { display: block; margin-bottom: 16px; }
@@ -68,4 +70,12 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 .mlink input { flex: 1; min-width: 0; padding: 8px 10px; border-radius: 10px; border: 1px solid rgba(255,255,255,.12); background: rgba(255,255,255,.06); color: #fff; font: 12px Geist, sans-serif; outline: none; }
 .mlink input::placeholder { color: rgba(255,255,255,.4); }
 .mlink button { padding: 8px 12px; border-radius: 10px; background: rgba(255,255,255,.9); color: #06141a; font-size: 12px; font-weight: 500; }
-@media (max-width: 640px) { .dock { bottom: 74px; } .music { bottom: 126px; width: calc(100vw - 24px); } }
+@media (max-width: 640px) {
+  .dock { bottom: 82px; } .music { bottom: 134px; width: calc(100vw - 24px); }
+  .title h1 { font-size: 26px; } .title p { white-space: nowrap; font-size: 11px; }
+  .panel { width: min(248px, calc(100vw - 24px)); }
+}
+/* tablets and other mid widths: keep the timer clear of the title and tip */
+@media (min-width: 641px) and (max-width: 1100px) { .dock { bottom: 96px; } .music { bottom: 148px; } }
+/* short landscape screens: the timer sits beside the settings button instead */
+@media (max-height: 500px) { .dock { left: auto; right: 84px; bottom: 26px; transform: none; } .music { left: auto; right: 84px; bottom: 76px; transform: none; } .music.closed { transform: translateY(8px); } .title p { display: none; } }

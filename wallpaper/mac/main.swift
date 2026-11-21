@@ -197,7 +197,8 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
         // the chosen level, one step lower on battery or in Low Power Mode
         let levels = ["saver", "balanced", "smooth"]
         var level = levels.firstIndex(of: settings.quality) ?? 1
-        if onBattery || ProcessInfo.processInfo.isLowPowerModeEnabled { level = max(0, level - 1) }
+        // on battery: Smooth eases to Balanced, never lower on its own (20 fps feels laggy)
+        if (onBattery || ProcessInfo.processInfo.isLowPowerModeEnabled) && level == 2 { level = 1 }
         var fps = [20, 30, 60][level]
         if let f = env["KOI_FPS"].flatMap(Int.init) { fps = f }
         let dpr = env["KOI_DPR"] ?? (level == 0 ? "1.25" : "0")

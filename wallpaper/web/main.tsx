@@ -25,6 +25,10 @@ declare global {
 let settings: Settings = { ...DEFAULTS, ...(window.__koiInit ?? {}) };
 // render resolution: a wallpaper doesn't need full Retina; the pond reads devicePixelRatio once at start
 if (settings.dpr) { const d = settings.dpr; Object.defineProperty(window, "devicePixelRatio", { get: () => d }); }
+// while the mouse is on the pond it runs at full rate, so wakes and splashes follow the cursor smoothly;
+// a couple of quiet seconds later it settles back to the chosen rate
+let lastTouch = -1e9;
+const fpsNow = () => (performance.now() - lastTouch < 2000 ? Math.max(settings.fps, 60) : settings.fps);
 const raf0 = window.requestAnimationFrame.bind(window);
 const held: FrameRequestCallback[] = [];
 let lastFrame = 0;
@@ -32,7 +36,7 @@ window.requestAnimationFrame = (cb: FrameRequestCallback) =>
   raf0(function tick(t) {
     if (settings.paused) { held.push(cb); return; }
     // too early: sleep until the next frame is due instead of waking on every display refresh
-    const wait = 1000 / settings.fps - 2 - (t - lastFrame);
+    const wait = 1000 / fpsNow() - 2 - (t - lastFrame);
     if (wait > 0) { setTimeout(() => raf0(tick), Math.max(0, wait - 8)); return; }
     lastFrame = t;
     (window as unknown as { __frames: number }).__frames = ((window as unknown as { __frames?: number }).__frames ?? 0) + 1;
@@ -55,11 +59,11 @@ window.koi = {
     if (wasPaused && !settings.paused) resume();
     listeners.forEach((l) => l(settings));
   },
-  move: (x, y) => ptr("pointermove", x, y),
-  down: (x, y) => { ptr("pointermove", x, y); ptr("pointerdown", x, y, 1); },
+  move: (x, y) => { lastTouch = performance.now(); ptr("pointermove", x, y); },
+  down: (x, y) => { lastTouch = performance.now(); ptr("pointermove", x, y); ptr("pointerdown", x, y, 1); },
   up: (x, y) => ptr("pointerup", x, y),
   leave: () => canvas()?.dispatchEvent(new PointerEvent("pointerleave", { pointerType: "mouse" })),
-  wheel: (dx, dy) => window.dispatchEvent(new WheelEvent("wheel", { deltaX: dx, deltaY: dy })),
+  wheel: (dx, dy) => { lastTouch = performance.now(); window.dispatchEvent(new WheelEvent("wheel", { deltaX: dx, deltaY: dy })); },
 };
 
 function Wallpaper() {

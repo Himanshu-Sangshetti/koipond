@@ -18,6 +18,21 @@ struct Settings: Codable {
     var petals = true
     var interactive = true
     var paused = false
+    var quality = "balanced"   // smooth (60 fps) · balanced (30 fps) · saver (20 fps, lower resolution)
+
+    init() {}
+    // older saves miss newer fields: keep what is there, default the rest
+    init(from d: Decoder) throws {
+        let c = try d.container(keyedBy: CodingKeys.self), z = Settings()
+        look = (try? c.decode(String.self, forKey: .look)) ?? z.look
+        fish = (try? c.decode(Int.self, forKey: .fish)) ?? z.fish
+        rain = (try? c.decode(Bool.self, forKey: .rain)) ?? z.rain
+        pads = (try? c.decode(Bool.self, forKey: .pads)) ?? z.pads
+        petals = (try? c.decode(Bool.self, forKey: .petals)) ?? z.petals
+        interactive = (try? c.decode(Bool.self, forKey: .interactive)) ?? z.interactive
+        paused = (try? c.decode(Bool.self, forKey: .paused)) ?? z.paused
+        quality = (try? c.decode(String.self, forKey: .quality)) ?? z.quality
+    }
 
     static let key = "settings"
     static func load() -> Settings {
@@ -179,9 +194,13 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     func pageSettings() -> String {
         let env = ProcessInfo.processInfo.environment
-        var fps = (onBattery || ProcessInfo.processInfo.isLowPowerModeEnabled) ? 30 : 60
+        // the chosen level, one step lower on battery or in Low Power Mode
+        let levels = ["saver", "balanced", "smooth"]
+        var level = levels.firstIndex(of: settings.quality) ?? 1
+        if onBattery || ProcessInfo.processInfo.isLowPowerModeEnabled { level = max(0, level - 1) }
+        var fps = [20, 30, 60][level]
         if let f = env["KOI_FPS"].flatMap(Int.init) { fps = f }
-        let dpr = env["KOI_DPR"] ?? "0"
+        let dpr = env["KOI_DPR"] ?? (level == 0 ? "1.25" : "0")
         let scale = env["KOI_SCALE"] ?? "1"
         let paused = settings.paused || hiddenBySystem
         return "{\"look\":\"\(settings.look)\",\"fish\":\(settings.fish),\"rain\":\(settings.rain ? 0.5 : 0),\"pads\":\(settings.pads),\"petals\":\(settings.petals),\"fps\":\(fps),\"paused\":\(paused),\"dpr\":\(dpr),\"scale\":\(scale)\(env["KOI_EXTRA"].map { "," + $0 } ?? "")}"
@@ -297,6 +316,11 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(item("Sakura", #selector(toggle(_:)), on: settings.petals, rep: "petals"))
         menu.addItem(item("Lily pads", #selector(toggle(_:)), on: settings.pads, rep: "pads"))
         menu.addItem(item("React to the mouse", #selector(toggle(_:)), on: settings.interactive, rep: "interactive"))
+        let perf = NSMenuItem(title: "Performance", action: nil, keyEquivalent: "")
+        let ps = NSMenu()
+        for (id, name) in [("smooth", "Smooth (60 fps)"), ("balanced", "Balanced (30 fps)"), ("saver", "Battery saver")] { ps.addItem(item(name, #selector(setQuality(_:)), on: settings.quality == id, rep: id)) }
+        perf.submenu = ps
+        menu.addItem(perf)
         menu.addItem(.separator())
         menu.addItem(item(settings.paused ? "Resume" : "Pause", #selector(togglePause), on: false))
         menu.addItem(item("Open at login", #selector(toggleLogin), on: loginEnabled))
@@ -327,7 +351,12 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
         changed()
     }
-    @objc func togglePause() { settings.paused.toggle(); changed() }
+    @objc func setQuality(_ i: NSMenuItem) {
+        settings.quality = i.representedObject as! String; settings.save()
+        // resolution is read once when the page starts, so reload the ponds
+        buildWindows()
+    }
+        @objc func togglePause() { settings.paused.toggle(); changed() }
     @objc func quit() { NSApp.terminate(nil) }
 
     // MARK: open at login

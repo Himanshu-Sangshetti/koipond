@@ -15,7 +15,7 @@ declare global {
   interface Window { panel: { sync(s: State): void }; webkit?: { messageHandlers: { koi: { postMessage(m: unknown): void } } } }
 }
 /** Tip jar link. */
-const COFFEE = "https://buymeacoffee.com/hxlfed";
+const COFFEE = "https://buymeacoffee.com/himanshu_sangshetti";
 const send = (m: Record<string, unknown>) => { try { window.webkit?.messageHandlers.koi.postMessage(m); } catch { /* not in the app */ } };
 const set = (k: keyof Settings, v: unknown) => send({ t: "set", k, v });
 

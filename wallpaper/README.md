@@ -28,6 +28,11 @@ Needs macOS 13 or newer, Apple silicon or Intel.
   it always runs smoothly; when the desktop is covered or the screen is off it pauses and uses almost nothing.
 - **Hide the menu bar icon** from the panel; open koipond again from Spotlight to bring the panel back.
 
+## Support
+
+koipond is free. If it makes your desk a bit calmer, you can [buy me a coffee](https://buymeacoffee.com/himanshu_sangshetti)
+or star the repo.
+
 ## Uninstall
 
 Quit it from the panel (or right-click the fish → Quit), then drag `koipond.app` from Applications to the Bin.

@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build:web": "vite build && PAGE=panel vite build",
+    "build:web": "vite build && vite build --mode panel",
     "build:mac": "npm run build:web && sh mac/build.sh"
   },
   "dependencies": {

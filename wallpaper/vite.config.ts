@@ -4,9 +4,8 @@ import { viteSingleFile } from "vite-plugin-singlefile";
 import path from "node:path";
 
 // self-contained pages (no network, no module fetches) that the desktop apps load from disk:
-// index.html = the wallpaper, panel.html = the pop-up panel (PAGE=panel)
-const page = process.env.PAGE === "panel" ? "panel" : "index";
-export default defineConfig({
+// index.html = the wallpaper, panel.html = the pop-up panel (vite build --mode panel)
+export default defineConfig(({ mode }) => { const page = mode === "panel" ? "panel" : "index"; return {
   root: path.resolve(__dirname, "web"),
   plugins: [react(), viteSingleFile()],
   resolve: {
@@ -18,4 +17,4 @@ export default defineConfig({
     outDir: path.resolve(__dirname, "build/web"), emptyOutDir: page === "index", chunkSizeWarningLimit: 3000,
     rollupOptions: { input: path.resolve(__dirname, `web/${page}.html`) },
   },
-});
+}; });

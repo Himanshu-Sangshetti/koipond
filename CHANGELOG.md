@@ -4,6 +4,8 @@
 
 First release.
 
+- Install with shadcn (`npx shadcn@latest add …/r/koi-pond.json`), npm, or copy the source.
+
 - `<KoiPond />` React component: procedural koi in WebGL2 water, one shared three.js renderer.
 - Koi with temperaments and activities (drift, cruise, dart, rest, investigate, feed, flee), a bend-limited spine,
   a spring-driven tail and lit 3D bodies with unique markings.

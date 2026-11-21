@@ -4,7 +4,27 @@ A living koi pond for the web. Koi swim on their own through real-looking water:
 linger, the surface bends the pond floor, light plays across it, rain falls and sakura drifts down.
 Glide over it and you leave a wake; tap it and it splashes; double-tap and the koi come to feed.
 
-![koipond](media/natural.jpg)
+![koipond: tap the water, the koi come to look](media/demo.gif)
+
+## Install
+
+**shadcn** (recommended): copies the source into your project, so it's yours to edit.
+
+```bash
+npx shadcn@latest add https://raw.githubusercontent.com/Himanshu-Sangshetti/koipond/main/public/r/koi-pond.json
+```
+
+This adds `components/koi-pond/` and installs `three`. Then:
+
+```tsx
+import { KoiPond } from "@/components/koi-pond";
+
+export default function Hero() {
+  return <KoiPond style={{ height: "100vh" }} />;
+}
+```
+
+**npm**: if you'd rather keep it as a dependency.
 
 ```bash
 npm install koipond three
@@ -12,16 +32,12 @@ npm install koipond three
 
 ```tsx
 import { KoiPond } from "koipond";
-
-export default function Hero() {
-  return <KoiPond style={{ height: "100vh" }} />;
-}
 ```
 
-That's all it needs. It fills its parent, so give the parent (or the component) a height.
+**Copy and paste**: the files in [`src/`](src) work as they are; you'll need `three` installed.
 
-Works with React 18 and 19, Next.js (App Router included, the component is marked `"use client"`), Vite and
-anything else that renders React. `react` and `three` are peer dependencies; nothing else ships.
+It fills its parent, so give the parent (or the component) a height. Works with React 18 and 19, Next.js (App
+Router included: the component is marked `"use client"`), Vite and anything else that renders React.
 
 ## What people can do with it
 

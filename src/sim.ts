@@ -55,13 +55,15 @@ export interface Fish {
   depth: number; depthGoal: number;           // 0 surface .. 1 deep
   joints: V[]; tail: V[]; tailVel: V[];
   finPhase: number; lastGulp: number;
+  /** 0..1 how present the fish is (grows in when added, shrinks away when removed); body ratios for live resizing. */
+  presence: number; leaving: boolean; lenRatio: number; girthRatio: number;
 }
 
 export interface Bubble { x: number; y: number; r: number; age: number; life: number }
 export interface Spark { x: number; y: number; vx: number; vy: number; age: number; life: number; r: number; drip?: boolean }
 export interface Pellet { x: number; y: number; vx: number; vy: number; age: number; eaten: boolean }
 export interface Ripple { x: number; y: number; age: number; power: number; kind: "tap" | "drop" | "nibble" | "wake" }
-export interface Pad { x: number; y: number; r: number; spin: number; angle: number; vx: number; vy: number; notch: number; tone: number; flower: boolean }
+export interface Pad { x: number; y: number; r: number; spin: number; angle: number; vx: number; vy: number; notch: number; tone: number; flower: boolean; hx: number; hy: number; rRatio: number; presence: number; leaving: boolean }
 export interface Petal { x: number; y: number; r: number; spin: number; angle: number; vx: number; vy: number; z: number }
 export interface Weed { x: number; y: number; len: number; phase: number; dir: number }
 
@@ -108,6 +110,7 @@ export class Pond {
   pointer: { x: number; y: number; still: number; speed: number; inside: boolean } = { x: 0, y: 0, still: 0, speed: 0, inside: false };
   keepClear: NonNullable<PondOptions["keepClear"]>;
   private rnd: Random;
+  private nextId = 0;
   private unit: number;
   private nextDrop = 2;
   private formation: { slots: V[]; flow: V[]; owner: number[] } | null = null;
@@ -119,7 +122,7 @@ export class Pond {
     for (let i = 0; i < (o.fish ?? 9); i++) this.fish.push(this.makeFish(i));
     for (let i = 0; i < (o.minnows ?? 0); i++) {
       const m = this.makeFish(1000 + i);
-      m.variety = MINNOW; m.spots = []; m.length = this.unit * this.rnd.between(0.24, 0.32); m.girth = m.length * 0.13;
+      m.variety = MINNOW; m.spots = []; m.lenRatio = this.rnd.between(0.24, 0.32); m.girthRatio = 0.13; m.length = this.unit * m.lenRatio; m.girth = m.length * 0.13;
       m.bold = 0.1; m.restless = 0.95; m.depth = this.rnd.between(0.3, 0.6);
       const seg = m.length / (JOINTS - 1); m.joints.forEach((j, k) => { j.x = m.x - Math.cos(m.heading) * seg * k; j.y = m.y - Math.sin(m.heading) * seg * k; });
       m.tail.forEach((j, k) => { j.x = m.x - Math.cos(m.heading) * (m.length + seg * 0.8 * (k + 1)); j.y = m.y - Math.sin(m.heading) * (m.length + seg * 0.8 * (k + 1)); });
@@ -135,7 +138,7 @@ export class Pond {
 
   private makeFish(id: number): Fish {
     const r = this.rnd, variety = VARIETIES[id % VARIETIES.length];
-    const length = this.unit * r.between(0.78, 1.25), girth = length * r.between(0.1, 0.12);
+    const lenRatio = r.between(0.78, 1.25), length = this.unit * lenRatio, girthRatio = r.between(0.1, 0.12), girth = length * girthRatio;
     const x = r.between(0.1, 0.9) * this.w, y = r.between(0.12, 0.88) * this.h, heading = r.between(-Math.PI, Math.PI);
     const joints: V[] = [], seg = length / (JOINTS - 1);
     for (let i = 0; i < JOINTS; i++) joints.push({ x: x - Math.cos(heading) * seg * i, y: y - Math.sin(heading) * seg * i });
@@ -155,7 +158,7 @@ export class Pond {
     return {
       id, variety, spots, length, girth, bold: r.next(), restless: r.next(),
       x, y, heading, speed: 0, turn: 0, activity: "drift", activityLeft: r.between(0.5, 3), goalHeading: heading, goalSpeed: 0, target: null,
-      effort: 0.3, beat: r.between(0, TAU), depth: r.between(0.1, 0.6), depthGoal: 0.3, joints, tail, tailVel, finPhase: r.between(0, TAU), lastGulp: -99,
+      effort: 0.3, beat: r.between(0, TAU), depth: r.between(0.1, 0.6), depthGoal: 0.3, joints, tail, tailVel, finPhase: r.between(0, TAU), lastGulp: -99, presence: 1, leaving: false, lenRatio, girthRatio,
     };
   }
 
@@ -166,7 +169,9 @@ export class Pond {
 
   private makePad(): Pad {
     const r = this.rnd;
-    return { x: r.between(0, 1) * this.w, y: r.between(0, 1) * this.h, r: this.unit * r.between(0.42, 0.68), spin: r.between(-0.03, 0.03), angle: r.between(0, TAU), vx: 0, vy: 0, notch: r.between(0.3, 0.5), tone: r.next(), flower: r.next() < 0.45 };
+    // each pad has a home inside the frame it drifts back to, so it never wanders off screen for long
+    const hx = r.between(0.12, 0.88) * this.w, hy = r.between(0.15, 0.85) * this.h, rr = r.between(0.42, 0.68);
+    return { x: hx, y: hy, r: this.unit * rr, spin: r.between(-0.03, 0.03), angle: r.between(0, TAU), vx: 0, vy: 0, notch: r.between(0.3, 0.5), tone: r.next(), flower: r.next() < 0.45, hx, hy, rRatio: rr, presence: 1, leaving: false };
   }
 
   // ------------------------------------------------------------------------------------- events
@@ -229,6 +234,25 @@ export class Pond {
       this.formation = { slots, flow: flow ?? slots.map(() => ({ x: 1, y: 0 })), owner };
     } else { this.formation.slots = slots; if (flow) this.formation.flow = flow; }
   }
+
+  /** Change the pond while it lives: koi, size, pads and petals ease in or out instead of resetting. */
+  setFishSize(fishSize: number) { this.unit = Math.min(this.w, this.h) * fishSize; }
+  setFishCount(n: number) {
+    const koi = this.fish.filter((f) => f.variety !== MINNOW && !f.leaving);
+    if (koi.length < n) {
+      for (let i = koi.length; i < n; i++) {
+        const id = 2000 + (this.nextId++), f = this.makeFish(id);
+        f.presence = 0; f.depth = 0.9; f.depthGoal = 0.3; // rises up from the deep
+        this.fish.push(f);
+      }
+    } else for (const f of koi.slice(n)) { f.leaving = true; f.depthGoal = 1; }
+  }
+  setPadCount(n: number) {
+    const live = this.pads.filter((p) => !p.leaving);
+    if (live.length < n) for (let i = live.length; i < n; i++) { const p = this.makePad(); p.presence = 0; p.r = 0.01; this.pads.push(p); }
+    else for (const p of live.slice(n)) p.leaving = true;
+  }
+  setPetalCount(n: number) { this.petalMax = n; if (n === 0) for (const p of this.petals) p.z = Math.min(p.z, 0); }
 
   resize(w: number, h: number) {
     const sx = w / this.w, sy = h / this.h;
@@ -293,7 +317,13 @@ export class Pond {
       p.vx *= Math.exp(-dt * 0.8); p.vy *= Math.exp(-dt * 0.8);
       p.x += p.vx * dt + Math.sin(this.t * 0.1 + p.angle) * u * 0.02 * dt; p.y += p.vy * dt + Math.cos(this.t * 0.08 + p.angle) * u * 0.02 * dt;
       p.angle += p.spin * dt;
-      const m = p.r; if (p.x < -m) p.x = this.w + m; if (p.x > this.w + m) p.x = -m; if (p.y < -m) p.y = this.h + m; if (p.y > this.h + m) p.y = -m;
+      // a gentle pull back toward home, and a soft bounce off the frame edges
+      p.vx += (p.hx - p.x) * dt * 0.05; p.vy += (p.hy - p.y) * dt * 0.05;
+      const m = p.r * 0.6;
+      if (p.x < m) { p.x = m; p.vx = Math.abs(p.vx) * 0.5; } if (p.x > this.w - m) { p.x = this.w - m; p.vx = -Math.abs(p.vx) * 0.5; }
+      if (p.y < m) { p.y = m; p.vy = Math.abs(p.vy) * 0.5; } if (p.y > this.h - m) { p.y = this.h - m; p.vy = -Math.abs(p.vy) * 0.5; }
+      p.presence += ((p.leaving ? 0 : 1) - p.presence) * (1 - Math.exp(-dt * 2.5));
+      p.r += (this.unit * p.rRatio * Math.max(0.01, p.presence) - p.r) * (1 - Math.exp(-dt * 3));
       if (this.border > 0 && !((p as unknown as { z?: number }).z! > 0) && this.shore(p.x, p.y) > 0.9) { const cx = this.w / 2 - p.x, cy = this.h / 2 - p.y, d = len(cx, cy) || 1; p.vx = cx / d * this.unit * 0.15; p.vy = cy / d * this.unit * 0.15; p.x += cx / d * 1.5; p.y += cy / d * 1.5; }
       if (false) { const b = this.border + p.r; if (p.x < b) { p.x = b; p.vx = Math.abs(p.vx); } if (p.x > this.w - b) { p.x = this.w - b; p.vx = -Math.abs(p.vx); } if (p.y < b) { p.y = b; p.vy = Math.abs(p.vy); } if (p.y > this.h - b) { p.y = this.h - b; p.vy = -Math.abs(p.vy); } }
     }
@@ -319,6 +349,15 @@ export class Pond {
       if (this.border > 0 && !((p as unknown as { z?: number }).z! > 0) && this.shore(p.x, p.y) > 0.9) { const cx = this.w / 2 - p.x, cy = this.h / 2 - p.y, d = len(cx, cy) || 1; p.vx = cx / d * this.unit * 0.15; p.vy = cy / d * this.unit * 0.15; p.x += cx / d * 1.5; p.y += cy / d * 1.5; }
       if (false) { const b = this.border + p.r; if (p.x < b) { p.x = b; p.vx = Math.abs(p.vx); } if (p.x > this.w - b) { p.x = this.w - b; p.vx = -Math.abs(p.vx); } if (p.y < b) { p.y = b; p.vy = Math.abs(p.vy); } if (p.y > this.h - b) { p.y = this.h - b; p.vy = -Math.abs(p.vy); } }
     }
+    // koi ease toward their size; arriving koi grow in, leaving koi sink and shrink away
+    for (const f of this.fish) {
+      f.presence += ((f.leaving ? 0 : 1) - f.presence) * (1 - Math.exp(-dt * 1.6));
+      const L = this.unit * f.lenRatio * (0.25 + 0.75 * f.presence);
+      f.length += (L - f.length) * (1 - Math.exp(-dt * 3)); f.girth = f.length * f.girthRatio * (0.4 + 0.6 * f.presence);
+    }
+    this.fish = this.fish.filter((f) => !(f.leaving && f.presence < 0.04));
+    this.pads = this.pads.filter((p) => !(p.leaving && p.presence < 0.04));
+    if (this.petalMax === 0) this.petals = this.petals.filter((p) => p.z > 0 ? false : (p.r *= 0.97) > this.unit * 0.01);
     const fm = this.formation;
     this.fish.forEach((f, idx) => {
       f.activityLeft -= dt;

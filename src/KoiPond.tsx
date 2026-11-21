@@ -21,7 +21,7 @@ export const LOOKS: Record<string, Look> = {
   violet: { mode: "dither", palette: ["#09080f", "#2a2160", "#6c5ce7", "#e4dfff"], deep: "#05040a", shallow: "#15122a", pixel: 2 },
   mono: { mode: "dither", palette: ["#0c0c0c", "#3a3a3a", "#9a9a9a", "#f2f0ea"], deep: "#050505", shallow: "#1b1b1b", pixel: 2 },
   ember: { mode: "dither", palette: ["#0d0806", "#5a1f12", "#e2451c", "#fde6c8"], deep: "#070403", shallow: "#1c0f0a", pixel: 2 },
-  natural: { mode: "color", palette: ["#000", "#000", "#000", "#000"], deep: "#062a3c", shallow: "#14525a", tint: "#f2fbff", pixel: 1, caustics: .4, waves: .8 },
+  natural: { mode: "color", palette: ["#000", "#000", "#000", "#000"], deep: "#0a5a6e", shallow: "#2bb3ae", tint: "#f2fffd", pixel: 1, caustics: .7, waves: .8, bright: 1.14, absorb: [2.1, .62, .58] },
 };
 
 export interface KoiPondHandle {
@@ -204,7 +204,13 @@ export const KoiPond = forwardRef<KoiPondHandle, KoiPondProps>(function KoiPond(
       canvas.removeEventListener("pointermove", onMove); canvas.removeEventListener("pointerdown", onDown); window.removeEventListener("pointerup", onUp);
       pondRef.current = null; fish3d?.dispose(); props3d?.dispose(); stage?.dispose();
     };
-  }, [fish, fishSize, pads, petals, minnows, seed, interactive, scale, scrollCurrent]);
+  }, [minnows, seed, interactive, scale, scrollCurrent]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // live settings: the pond eases into the new values instead of being rebuilt
+  useEffect(() => { pondRef.current?.setFishCount(fish); }, [fish]);
+  useEffect(() => { pondRef.current?.setFishSize(fishSize); }, [fishSize]);
+  useEffect(() => { pondRef.current?.setPadCount(pads); }, [pads]);
+  useEffect(() => { pondRef.current?.setPetalCount(petals); }, [petals]);
 
   return (
     <div className={className} style={{ position: "relative", overflow: "hidden", width: "100%", height: "100%", ...style }}>

@@ -178,8 +178,24 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate, WKScriptMessag
     var focus = FocusTimer()
     var tick: Timer?
     var edgeSince: TimeInterval? = nil
+    // supporting koipond (pay what you want; see Support.swift)
+    var supporter = Supporter.load()
+    var askShowing = false
+    var supportBusy = false
+    var supportError: String?
+    var panelHeight: CGFloat?   // what the panel page last asked for
 
     func applicationDidFinishLaunching(_ n: Notification) {
+        if let k = ProcessInfo.processInfo.environment["KOI_ACTIVATE"] {
+            Activation.activate(k) { r in
+                switch r {
+                case .success(let sup): print("activated \(Store.mode.rawValue) \(sup.instanceID) \(sup.email)")
+                case .failure(let f): print("failed \(f.message)")
+                }
+                NSApp.terminate(nil)
+            }
+            return
+        }
         guard let p = Bundle.main.url(forResource: "index", withExtension: "html", subdirectory: "web") else {
             NSLog("koipond: page missing from the app bundle"); NSApp.terminate(nil); return
         }
@@ -197,6 +213,17 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate, WKScriptMessag
         if let pp = Bundle.main.url(forResource: "panel", withExtension: "html", subdirectory: "web") {
             panel = PanelWindow(page: pp, handler: self)
             NotificationCenter.default.addObserver(self, selector: #selector(panelLostFocus), name: NSWindow.didResignKeyNotification, object: panel)
+        }
+        // the first time koipond opens (and once more a week later) the panel shows the optional "pay what you want" card
+        if SupportAsk.due() && !bench && ProcessInfo.processInfo.environment["KOI_NOASK"] == nil {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) {
+                self.askShowing = true; SupportAsk.markAsked()
+                _ = self.applicationShouldHandleReopen(NSApp, hasVisibleWindows: false)
+            }
+        }
+        // testing: KOI_PANEL_JS runs a script in the panel page once it has opened (drives its buttons end to end)
+        if let js = ProcessInfo.processInfo.environment["KOI_PANEL_JS"] {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 4.5) { self.panel?.js(js) }
         }
         if ProcessInfo.processInfo.environment["KOI_PANEL"] != nil { DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { _ = self.applicationShouldHandleReopen(NSApp, hasVisibleWindows: false) } }
         tick = Timer(timeInterval: 1, repeats: true) { [weak self] _ in self?.timerTick() }
@@ -346,18 +373,21 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate, WKScriptMessag
     /// Resting the cursor on the right edge of the desktop slides the panel out.
     var edgeNear: Double = -1
     func edgeReveal(_ p: NSPoint) {
-        // the handle on the right edge brightens as the cursor comes within ~140 pt
+        // the handle on the right edge brightens as the cursor comes within ~220 pt
         if let scr = NSScreen.screens.first(where: { NSMouseInRect(p, $0.frame, false) }) {
-            let near = max(0, 1 - Double(scr.frame.maxX - p.x) / 140)
+            let near = max(0, 1 - Double(scr.frame.maxX - p.x) / 220)
             let q = (near * 20).rounded() / 20
             if q != edgeNear { edgeNear = q; windows.forEach { $0.js("koi.edge && koi.edge(\($0.screenRef == scr ? q : 0))") } }
         }
         guard let panel, !panel.isVisible, let scr = NSScreen.screens.first(where: { NSMouseInRect(p, $0.frame, false) }) else { edgeSince = nil; return }
-        let atEdge = p.x >= scr.frame.maxX - 2 && p.y > scr.frame.minY + 40 && p.y < scr.visibleFrame.maxY - 20
+        // a 14 pt strip along the right edge, or anywhere within 40 pt of the handle itself
+        let fromEdge = scr.frame.maxX - p.x
+        let nearHandle = fromEdge <= 40 && abs(p.y - scr.frame.midY) <= 70
+        let atEdge = (fromEdge <= 14 || nearHandle) && p.y > scr.frame.minY + 40 && p.y < scr.visibleFrame.maxY - 20
         if !atEdge || NSEvent.pressedMouseButtons != 0 || covered(p) { edgeSince = nil; return }
         let now = ProcessInfo.processInfo.systemUptime
         if edgeSince == nil { edgeSince = now }
-        if now - edgeSince! > 0.45 {
+        if now - edgeSince! > 0.3 {
             edgeSince = nil
             let f = panel.frame.size
             let y = min(max(p.y - f.height / 2, scr.visibleFrame.minY + 8), scr.visibleFrame.maxY - f.height - 8)
@@ -406,7 +436,7 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate, WKScriptMessag
     func showPanel(at origin: NSPoint, slideFrom edgeX: CGFloat?) {
         guard let panel else { return }
         syncPanel()
-        let end = NSRect(origin: origin, size: panel.frame.size)
+        let end = NSRect(origin: origin, size: NSSize(width: panel.frame.width, height: panelHeight ?? panel.frame.height))
         panel.setFrame(edgeX.map { NSRect(x: $0, y: origin.y, width: end.width, height: end.height) } ?? end.offsetBy(dx: 0, dy: 8), display: false)
         panel.alphaValue = 0
         NSApp.activate(ignoringOtherApps: true)
@@ -422,7 +452,7 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate, WKScriptMessag
         NSAnimationContext.runAnimationGroup({ c in c.duration = 0.15; panel.animator().alphaValue = 0 }, completionHandler: { panel.orderOut(nil) })
     }
 
-    @objc func panelLostFocus() { hidePanel() }
+    @objc func panelLostFocus() { if ProcessInfo.processInfo.environment["KOI_PANEL_JS"] == nil { hidePanel() } }
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
         // opening the app again (Spotlight, Finder) brings the panel up, even with the menu bar icon hidden
@@ -434,8 +464,12 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate, WKScriptMessag
         let s: [String: Any] = ["look": settings.look, "fish": settings.fish, "size": settings.size, "rain": settings.rain, "rainAmount": settings.rainAmount,
                                 "pads": settings.pads, "petals": settings.petals, "interactive": settings.interactive, "quality": settings.quality,
                                 "login": loginEnabled, "showIcon": settings.showIcon]
-        let state: [String: Any] = ["settings": s, "timer": ["mode": focus.mode, "left": focus.left, "running": focus.running]]
-        if let d = try? JSONSerialization.data(withJSONObject: state), let j = String(data: d, encoding: .utf8) { panel?.js("window.panel && panel.sync(\(j))") }
+        let support: [String: Any] = ["supporter": supporter != nil, "email": supporter?.email ?? "", "ask": askShowing, "busy": supportBusy, "error": supportError ?? ""]
+        let state: [String: Any] = ["settings": s, "timer": ["mode": focus.mode, "left": focus.left, "running": focus.running], "support": support]
+        if let d = try? JSONSerialization.data(withJSONObject: state), let j = String(data: d, encoding: .utf8) {
+            panel?.js("window.panel && panel.sync(\(j))")
+            if debug { NSLog("koipond: support %@ panel %.0f", "\(support)", panel?.frame.height ?? 0) }
+        }
     }
 
     func userContentController(_ c: WKUserContentController, didReceive m: WKScriptMessage) {
@@ -445,6 +479,28 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate, WKScriptMessag
         case "close": hidePanel()
         case "open": if let u = (b["v"] as? String).flatMap(URL.init(string:)), u.scheme == "https" { NSWorkspace.shared.open(u); hidePanel() }
         case "quit": NSApp.terminate(nil)
+        case "pay": askShowing = false; NSWorkspace.shared.open(Store.checkoutURL); hidePanel()
+        case "skip": askShowing = false; syncPanel()
+        case "size":
+            guard let panel, let h = (b["v"] as? NSNumber).map({ CGFloat($0.doubleValue) }) else { return }
+            let maxH = (panel.screen ?? NSScreen.main).map { $0.visibleFrame.height - 16 } ?? 900
+            let nh = min(max(h, 360), maxH), f = panel.frame
+            if debug { NSLog("koipond: panel size %.0f -> %.0f (max %.0f)", f.height, nh, maxH) }
+            panelHeight = nh
+            // animate too, so it also wins over a slide-in that is still running
+            if abs(nh - f.height) > 3 { NSAnimationContext.runAnimationGroup { c in c.duration = 0.12; panel.animator().setFrame(NSRect(x: f.minX, y: f.maxY - nh, width: f.width, height: nh), display: true) } }
+        case "activate":
+            guard let key = b["v"] as? String, !key.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, !supportBusy else { return }
+            supportBusy = true; supportError = nil; syncPanel()
+            Activation.activate(key) { [weak self] r in
+                guard let self else { return }
+                self.supportBusy = false
+                switch r {
+                case .success(let sup): sup.save(); self.supporter = sup; self.askShowing = false
+                case .failure(let f): self.supportError = f.message
+                }
+                self.syncPanel()
+            }
         case "timer":
             if b["a"] as? String == "reset" { focus = FocusTimer() } else { focus.running.toggle() }
             showCountdown(); syncPanel()

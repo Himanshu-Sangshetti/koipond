@@ -4,7 +4,7 @@ html, body { margin: 0; height: 100%; background: transparent; color: #fff; over
 button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; padding: 0; }
 #root { height: 100%; }
 
-.sheet { height: 100%; display: flex; flex-direction: column; gap: 12px; padding: 14px; border-radius: 18px; overflow-y: auto;
+.sheet { height: auto; max-height: 100vh; display: flex; flex-direction: column; gap: 12px; padding: 14px; border-radius: 18px; overflow-y: auto;
   background: rgba(7, 22, 26, .55); border: 1px solid rgba(255, 255, 255, .1); scrollbar-width: none; }
 .sheet::-webkit-scrollbar { display: none; }
 .label { color: rgba(255, 255, 255, .45); margin: 0 0 8px; }
@@ -59,3 +59,29 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 .star:hover { background: rgba(255, 255, 255, .12); color: #fff; }
 .star span:first-of-type { flex: 1; }
 .star .count { font: 11px ui-monospace, Menlo, monospace; color: rgba(255, 255, 255, .5); }
+
+/* supporting koipond (optional) */
+.ask { display: flex; flex-direction: column; gap: 6px; background: rgba(255, 255, 255, .1); border: 1px solid rgba(255, 255, 255, .14); }
+.ask .at { margin: 0; font-size: 13px; font-weight: 600; }
+.ask .ad { margin: 0; color: rgba(255, 255, 255, .7); line-height: 1.45; }
+.ask .ab { display: flex; gap: 8px; margin-top: 6px; }
+.primary { flex: 1; padding: 8px 0; border-radius: 10px; background: rgba(255, 255, 255, .92); color: #06141a; font-weight: 600; }
+.plain { flex: 1; padding: 8px 0; border-radius: 10px; color: rgba(255, 255, 255, .7); background: rgba(255, 255, 255, .06); }
+.plain:hover { color: #fff; background: rgba(255, 255, 255, .12); }
+.support { display: flex; flex-direction: column; gap: 6px; }
+.havekey { align-self: flex-start; padding: 0 4px; color: rgba(255, 255, 255, .4); font-size: 11px; }
+.havekey:hover { color: #fff; }
+.keyrow { display: flex; gap: 6px; }
+.keyrow input { flex: 1; min-width: 0; padding: 8px 10px; border-radius: 10px; border: 1px solid rgba(255, 255, 255, .14); background: rgba(255, 255, 255, .06); color: #fff;
+  font: 11px ui-monospace, Menlo, monospace; outline: none; -webkit-user-select: text; user-select: text; }
+.keyrow input::placeholder { color: rgba(255, 255, 255, .35); font-family: -apple-system, system-ui, sans-serif; }
+.keyrow button { padding: 0 12px; border-radius: 10px; background: rgba(255, 255, 255, .9); color: #06141a; font-weight: 600; }
+.keyrow button:disabled { opacity: .6; }
+.keyerr { margin: 0; padding: 0 4px; color: #ffb4a8; font-size: 11px; line-height: 1.4; }
+.thanks { cursor: default; color: #fff; }
+.thanks:hover { background: rgba(255, 255, 255, .06); }
+.paybtn { justify-content: center; gap: 8px; background: rgba(255, 255, 255, .9); color: #072a31; font-weight: 500; }
+.paybtn:hover { background: #fff; color: #072a31; }
+.paybtn span:first-of-type { flex: none; }
+.paybtn .from { font-size: 11.5px; opacity: .6; font-weight: 400; }
+.paynote { margin: 0; padding: 0 4px; font-size: 11px; line-height: 1.45; color: rgba(255, 255, 255, .5); }

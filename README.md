@@ -6,7 +6,8 @@
 
 <p align="center">
   Koi that swim on their own through real-looking water. Glide over it, tap it, feed them.<br>
-  One React component, open source. <a href="https://koipond-demo.vercel.app">Try it live</a>.
+  One React component, open source. <a href="https://koipond-demo.vercel.app">Try it live</a>.<br>
+  Also a <a href="#as-your-wallpaper-mac-windows-linux">desktop wallpaper</a> for Mac, Windows and Linux: free, or <a href="https://koipond-demo.vercel.app/?get">pay what you want</a>.
 </p>
 
 <p align="center">
@@ -78,16 +79,24 @@ anything else that renders React. `three` (0.160 or newer) is the only other dep
 | Double-tap or long-press | drops food; nearby koi race over to eat |
 | Scroll or swipe | stirs a current; koi, petals and pads stream with it |
 
-## As your wallpaper (macOS)
+## As your wallpaper (Mac, Windows, Linux)
 
-The pond can also live on your desktop, under your icons, and it still reacts to your mouse. Free, no account,
-no other apps needed:
+The pond can also live on your desktop, under your icons, and it still reacts to your mouse. Free, no account:
 
 ```sh
+# macOS and Linux
 curl -fsSL https://raw.githubusercontent.com/Himanshu-Sangshetti/koipond/main/wallpaper/install.sh | sh
 ```
 
-Click the fish in the menu bar for the looks, a focus timer and settings. More in [wallpaper/](wallpaper/).
+```powershell
+# Windows 10/11, in PowerShell
+irm https://raw.githubusercontent.com/Himanshu-Sangshetti/koipond/main/wallpaper/install.ps1 | iex
+```
+
+On a Mac click the fish in the menu bar for the looks, a focus timer and settings. On Windows right-click the
+fish in the tray; on Linux right-click the pond. More in [wallpaper/](wallpaper/).
+
+It stays free for everyone. **[Pay what you want (from $3)](https://koipond-demo.vercel.app/?get)** to support it: supporters get the new wallpapers as they come out, every 2 weeks to a month.
 
 <p align="center"><img src=".github/assets/divider.webp" alt="" width="420"></p>
 

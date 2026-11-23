@@ -1,11 +1,11 @@
-# Builds the desktop wallpaper apps. A wallpaper tag (wallpaper-v1.2.3) attaches the Mac app to a GitHub
-# release. The Windows app is built as a check only until it has been tried on a real PC.
+# Builds and checks the desktop wallpaper apps (Mac, Windows, Linux). A wallpaper tag (wallpaper-v1.2.3)
+# attaches all three to a GitHub release.
 name: wallpaper
 on:
   push:
     tags: ["wallpaper-v*.*.*"]
   pull_request:
-    paths: ["wallpaper/**", "src/**", ".github/workflows/wallpaper.yml"]
+    paths: ["wallpaper/**", "src/**", "tests/**", ".github/workflows/wallpaper.yml"]
   workflow_dispatch:
 permissions:
   contents: read
@@ -21,6 +21,18 @@ jobs:
         working-directory: wallpaper
       - run: npm run build:mac
         working-directory: wallpaper
+        env:
+          KOI_RELEASE: ${{ startsWith(github.ref, 'refs/tags/wallpaper-v') && '1' || '' }}
+      # the optional pay-what-you-want store: key handling, when the card shows, and Dodo's live key check
+      - name: Store checks
+        working-directory: wallpaper
+        run: swiftc mac/Support.swift mac/tests/main.swift -o build/support-tests && KOI_NETWORK=1 build/support-tests
+      # the panel page in headless Chrome: card, "I have a key", supporter state, every button's message
+      - name: Panel checks
+        run: node tests/e2e/panel.mjs
+      # the real app: page loads and draws, card on first open, key check reaches Dodo, installer works
+      - name: App smoke test
+        run: sh tests/e2e/mac-smoke.sh
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with: { name: koipond-mac, path: wallpaper/build/koipond-mac.zip }
   windows:
@@ -40,14 +52,94 @@ jobs:
         working-directory: wallpaper
         run: |
           New-Item -ItemType Directory -Force windows/web | Out-Null
-          Copy-Item build/web/*.html windows/web/
+          Copy-Item build/web/index.html windows/web/
           dotnet publish windows/koipond.csproj -c Release -o build/windows
           Compress-Archive -Path build/windows/* -DestinationPath build/koipond-windows.zip
+      # run the app for real: the page loads in WebView2 behind the icons, covers the desktop, the card shows
+      # on first open, the key check reaches Dodo, and the one-line installer works. Screenshots are kept.
+      - name: App smoke test
+        shell: pwsh
+        working-directory: wallpaper
+        run: |
+          Add-Type -AssemblyName System.Windows.Forms, System.Drawing
+          function Shot($name) {
+            $b = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
+            $bmp = New-Object System.Drawing.Bitmap $b.Width, $b.Height
+            [System.Drawing.Graphics]::FromImage($bmp).CopyFromScreen($b.Location, [System.Drawing.Point]::Empty, $b.Size)
+            $bmp.Save((Join-Path $env:RUNNER_TEMP "$name.png")); return $bmp
+          }
+          $fail = 0
+          function Check($ok, $name) { if ($ok) { "ok    $name" } else { "FAIL  $name"; $script:fail = 1 } }
+          # a desktop spot no window covers (bottom right, above the taskbar)
+          $b = [System.Windows.Forms.Screen]::PrimaryScreen.WorkingArea
+          $px = $b.Right - 30; $py = $b.Bottom - 30
+          $before = (Shot "windows-before").GetPixel($px, $py)
+          Remove-Item -Recurse -Force (Join-Path $env:APPDATA "koipond") -ErrorAction SilentlyContinue
+          $out = Join-Path $env:RUNNER_TEMP "smoke.json"
+          $env:KOI_SMOKE = $out
+          $p = Start-Process build/windows/koipond.exe -PassThru
+          Start-Sleep -Seconds 7
+          $after = (Shot "windows-desktop").GetPixel($px, $py)
+          if (-not $p.WaitForExit(90000)) { $p.Kill(); throw "the app did not finish its smoke run" }
+          if (-not (Test-Path $out)) { throw "the app wrote no smoke report" }
+          Get-Content $out
+          $r = Get-Content $out -Raw | ConvertFrom-Json
+          $page = $r.page | ConvertFrom-Json
+          Check $r.ready "the pond page loads in WebView2 $($r.webview)"
+          Check ($page.canvas -gt 0) "the pond canvas is up ($($page.canvas)px wide)"
+          "note  frames $($r.framesBefore) -> $($page.frames) (no GPU here; real PCs draw 30-60 a second)"
+          Check $r.parented "the window sits behind the desktop icons (parent: $($r.parentClass))"
+          Check ($before -ne $after) "the pond covers the desktop (pixel $before -> $after)"
+          Check $r.card "the pay-what-you-want card shows on first open"
+          $s = Get-Content (Join-Path $env:APPDATA "koipond/settings.json") -Raw | ConvertFrom-Json
+          Check ($s.Asked -eq 1) "the card is remembered as shown (Asked = $($s.Asked))"
+          Remove-Item Env:KOI_SMOKE
+          $a = Join-Path $env:RUNNER_TEMP "activate.txt"
+          $env:KOI_SMOKE = $a; $env:KOI_ACTIVATE = "KOIPOND-NOT-A-REAL-KEY"
+          Start-Process build/windows/koipond.exe -Wait
+          Remove-Item Env:KOI_SMOKE, Env:KOI_ACTIVATE
+          $res = Get-Content $a -Raw
+          Check ($res -like "failed That key wasn't found*") "a made-up key is checked with Dodo ($res)"
+          # the installer, from a local copy of the release download
+          $dest = Join-Path $env:RUNNER_TEMP "koipond-installed"
+          $env:KOI_URL = "file:///" + ((Resolve-Path build/koipond-windows.zip).Path -replace '\\','/'); $env:KOI_DEST = $dest; $env:KOI_NO_OPEN = "1"
+          ./install.ps1
+          Check (Test-Path (Join-Path $dest "koipond.exe")) "the installer puts the app in place"
+          $zone = Get-Item (Join-Path $dest "koipond.exe") -Stream Zone.Identifier -ErrorAction SilentlyContinue
+          Check ($null -eq $zone) "the installed app has no downloaded-from-the-web mark (no SmartScreen warning)"
+          if ($fail) { throw "some Windows app checks failed" } else { "all Windows app checks passed" }
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with: { name: windows-smoke, path: "${{ runner.temp }}/windows-*.png", if-no-files-found: ignore }
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with: { name: koipond-windows, path: wallpaper/build/koipond-windows.zip }
+  linux:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { persist-credentials: false }
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with: { node-version: 24 }
+      - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends python3-gi gir1.2-webkit2-4.1 gir1.2-gtk-3.0 xvfb openbox x11-utils imagemagick
+      - run: npm ci --ignore-scripts
+        working-directory: wallpaper
+      - run: npm run build:linux
+        working-directory: wallpaper
+      # the optional pay-what-you-want store: key answers, when the card shows, and Dodo's live key check
+      - name: Store checks
+        working-directory: wallpaper
+        run: KOI_NETWORK=1 /usr/bin/python3 linux/tests/test_store.py
+      # the real app on a virtual screen: desktop layer, pond covers it, card, key box, menu, installer
+      - name: App smoke test
+        run: PATH=/usr/bin:$PATH KOI_SHOTS=$RUNNER_TEMP sh tests/e2e/linux-smoke.sh
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with: { name: linux-smoke, path: "${{ runner.temp }}/linux-desktop.png", if-no-files-found: ignore }
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with: { name: koipond-linux, path: wallpaper/build/koipond-linux.tar.gz }
   release:
     if: startsWith(github.ref, 'refs/tags/wallpaper-v')
-    needs: [mac, windows]
+    needs: [mac, windows, linux]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -58,6 +150,10 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ github.ref_name }}
         run: |
-          gh release create "$TAG" dist/koipond-mac.zip \
+          RAW=https://raw.githubusercontent.com/Himanshu-Sangshetti/koipond/main/wallpaper
+          gh release create "$TAG" dist/koipond-mac.zip dist/koipond-windows.zip dist/koipond-linux.tar.gz \
             --repo "$GITHUB_REPOSITORY" --title "koipond wallpaper ${TAG#wallpaper-}" --latest \
-            --notes "The pond as your desktop wallpaper, for macOS. Install: curl -fsSL https://raw.githubusercontent.com/Himanshu-Sangshetti/koipond/main/wallpaper/install.sh | sh"
+            --notes "The pond as your desktop wallpaper. Free; pay what you want if you like it.
+
+          - macOS and Linux: \`curl -fsSL $RAW/install.sh | sh\`
+          - Windows (PowerShell): \`irm $RAW/install.ps1 | iex\`"

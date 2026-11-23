@@ -8,6 +8,11 @@ const STYLES = [
 ] as const;
 type StyleId = (typeof STYLES)[number]["id"];
 type Settings = { fish: number; size: number; caustics: number; waves: number; rain: number; pads: boolean; petals: boolean };
+// pay-what-you-want checkout (Dodo Payments). The app itself is free; paying is optional.
+const SITE = "https://koipond-demo.vercel.app";
+const CHECKOUT = `${import.meta.env.VITE_KOI_CHECKOUT ?? "https://test.checkout.dodopayments.com/buy/pdt_0NsYCacmTCBksDKMSi7PX"}?quantity=1&redirect_url=${encodeURIComponent(SITE + "/?thanks")}`;
+const INSTALL = "curl -fsSL https://raw.githubusercontent.com/Himanshu-Sangshetti/koipond/main/wallpaper/install.sh | sh";
+const ZIP = "https://github.com/Himanshu-Sangshetti/koipond/releases/latest/download/koipond-mac.zip";
 const DEFAULTS: Settings = { fish: 18, size: 0.18, caustics: 2.1, waves: 1.9, rain: 0.65, pads: true, petals: true };
 
 function Slider({ label, value, min, max, step, onChange }: { label: string; value: number; min: number; max: number; step: number; onChange: (v: number) => void }) {
@@ -33,6 +38,12 @@ export function App() {
   const [stars, setStars] = useState<number | null>(null);
   const [bare, setBare] = useState(false);       // full screen: only the pond
   const pondRef = useRef<KoiPondHandle>(null);
+  // the Mac app sheet: opens by itself after a payment (?thanks) or from the receipt link (?get)
+  const q = typeof window !== "undefined" ? new URLSearchParams(location.search) : new URLSearchParams();
+  const paid = q.has("thanks") && q.get("status") === "succeeded";
+  const [mac, setMac] = useState(q.has("thanks") || q.has("get"));
+  const [copied, setCopied] = useState(false);
+  const copy = () => navigator.clipboard?.writeText(INSTALL).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1800); }).catch(() => {});
   // music: Spotify's own embedded player (no login needed; full tracks for signed-in Spotify users)
   const [music, setMusic] = useState(false);
   const [embed, setEmbed] = useState("playlist/6jTot6wOCMCSfAnvg6WL5A");
@@ -123,10 +134,20 @@ export function App() {
           <svg viewBox="0 0 16 16" width="15" height="15" fill="currentColor" aria-hidden><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
           {stars !== null && <span className="star">★ {stars}</span>}
         </a>
+        <button className={`linkbtn macbtn ${mac ? "on" : ""}`} onClick={() => setMac((m) => !m)}>Mac app</button>
         <button className="linkbtn" onClick={fullscreen} aria-label="Full screen">
           <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" /></svg>
         </button>
       </nav>
+      {mac && (
+        <div className="wallsheet">
+          <p className="wt">{paid ? "Thank you for supporting koipond" : "koipond for your Mac desktop"}</p>
+          <p className="wd">{paid ? "Your receipt is on its way. Install it the same way as everyone:" : "Free for everyone. Paste this in Terminal to install:"}</p>
+          <button className="wcopy" onClick={copy} title={INSTALL}><code>curl -fsSL …/install.sh | sh</code><span>{copied ? "Copied" : "Copy"}</span></button>
+          {!paid && <a className="wrow wpay" href={CHECKOUT} target="_blank" rel="noreferrer"><b>Pay what you want</b><span>Optional. Same app, it just helps me keep making it.</span></a>}
+          <a className="wzip" href={ZIP}>or download the .zip (macOS will ask you to allow it in Privacy &amp; Security)</a>
+        </div>
+      )}
       <div className="switch">
         {STYLES.map((st) => (
           <button key={st.id} className={look === st.id ? "on" : ""} onClick={() => setLook(st.id)} title={st.label}>

@@ -89,6 +89,8 @@ curl -fsSL https://raw.githubusercontent.com/Himanshu-Sangshetti/koipond/main/wa
 
 Click the fish in the menu bar for the looks, a focus timer and settings. More in [wallpaper/](wallpaper/).
 
+It stays free for everyone. If you'd like to support it, you can [pay what you want](https://koipond-demo.vercel.app/?get).
+
 <p align="center"><img src=".github/assets/divider.webp" alt="" width="420"></p>
 
 ## The looks

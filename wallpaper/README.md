@@ -30,7 +30,7 @@ Needs macOS 13 or newer, Apple silicon or Intel.
 
 ## Support
 
-koipond is free. If it makes your desk a bit calmer, you can [buy me a coffee](https://buymeacoffee.com/himanshu_sangshetti)
+koipond is free. If it makes your desk a bit calmer, you can [pay what you want](https://koipond-demo.vercel.app/?get) or [buy me a coffee](https://buymeacoffee.com/himanshu_sangshetti)
 or star the repo.
 
 ## Uninstall

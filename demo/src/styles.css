@@ -81,3 +81,11 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 @media (max-height: 500px) { .dock { left: auto; right: 84px; bottom: 26px; transform: none; } .music { left: auto; right: 84px; bottom: 76px; transform: none; } .music.closed { transform: translateY(8px); } .title p { display: none; } }
 
 body.rec, body.rec * { cursor: none !important; }
+.links .macbtn { padding: 7px 12px; } .links .macbtn.on { background: rgba(255,255,255,.14); color: #fff; }
+.wallsheet .wt { margin: 0; font-size: 14px; font-weight: 500; }
+.wallsheet .wd { margin: 0 0 4px; font-size: 12px; color: rgba(255,255,255,.6); }
+.wallsheet .wcopy { margin: 0 0 4px; align-items: center; text-align: left; cursor: pointer; }
+.wallsheet .wcopy code { font: inherit; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wallsheet .wcopy:hover { border-color: rgba(255,255,255,.4); color: #fff; }
+.wzip { margin-top: 4px; font-size: 11px; line-height: 1.4; color: rgba(255,255,255,.4); text-decoration: none; }
+.wzip:hover { color: rgba(255,255,255,.75); }

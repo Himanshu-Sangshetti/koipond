@@ -132,7 +132,7 @@ sealed class SupportForm : Form
 
         var col = new FlowLayoutPanel { FlowDirection = FlowDirection.TopDown, AutoSize = true, WrapContents = false, BackColor = Bg };
         col.Controls.Add(new Label { Text = "koipond is free for everyone", Font = new Font("Segoe UI Semibold", 13f), AutoSize = true, Margin = new Padding(0, 0, 0, 6) });
-        col.Controls.Add(new Label { Text = "If it makes your desk a little calmer, you can pay what you want.\nIt's optional and nothing is locked.", ForeColor = Dim, AutoSize = true, Margin = new Padding(0, 0, 0, 16) });
+        col.Controls.Add(new Label { Text = "If it makes your desk a little calmer, you can pay what you want.\nSupporters also get the new wallpapers as they come out, every 2 weeks to a month.", ForeColor = Dim, AutoSize = true, Margin = new Padding(0, 0, 0, 16) });
 
         var buttons = new FlowLayoutPanel { AutoSize = true, BackColor = Bg, Margin = new Padding(0) };
         var pay = Btn("Pay what you want", Accent, Color.FromArgb(20, 20, 20));

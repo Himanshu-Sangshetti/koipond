@@ -69,7 +69,7 @@ function Panel() {
       {sup.ask && !sup.supporter && (
         <div className="card ask">
           <p className="at">koipond is free for everyone</p>
-          <p className="ad">If it makes your desk a little calmer, you can pay what you want. It's optional and nothing is locked.</p>
+          <p className="ad">If it makes your desk a little calmer, you can pay what you want. Supporters also get the new wallpapers as they come out, every 2 weeks to a month.</p>
           <div className="ab">
             <button className="primary" onClick={() => send({ t: "pay" })}>Pay what you want</button>
             <button className="plain" onClick={() => send({ t: "skip" })}>Continue free</button>

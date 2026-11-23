@@ -159,7 +159,7 @@ class SupportCard(Gtk.Window):
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8, margin=22)
         t = Gtk.Label(label="koipond is free for everyone", xalign=0)
         t.get_style_context().add_class("title")
-        d = Gtk.Label(label="If it makes your desk a little calmer, you can pay what you want.\nIt's optional and nothing is locked.", xalign=0)
+        d = Gtk.Label(label="If it makes your desk a little calmer, you can pay what you want.\nSupporters also get the new wallpapers as they come out, every 2 weeks to a month.", xalign=0)
         d.get_style_context().add_class("dim")
         row = Gtk.Box(spacing=10, margin_top=8)
         pay = Gtk.Button(label="Pay what you want")

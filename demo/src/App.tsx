@@ -9,11 +9,11 @@ const STYLES = [
 type StyleId = (typeof STYLES)[number]["id"];
 type Settings = { fish: number; size: number; caustics: number; waves: number; rain: number; pads: boolean; petals: boolean };
 // pay-what-you-want checkout (Dodo Payments). The app itself is free; paying is optional.
-const SITE = "https://koipond-demo.vercel.app";
+const SITE = import.meta.env.VITE_KOI_SITE ?? "https://koipond-demo.vercel.app";
 const CHECKOUT = `${import.meta.env.VITE_KOI_CHECKOUT ?? "https://checkout.dodopayments.com/buy/pdt_0NsYIva9ea1hMacA3xaaB"}?quantity=1&redirect_url=${encodeURIComponent(SITE + "/?thanks")}`;
 // the desktop app: one line to install on each system (no warnings: nothing is marked as downloaded from the web)
-const RAW = "https://raw.githubusercontent.com/Himanshu-Sangshetti/koipond/main/wallpaper";
-const REL = "https://github.com/Himanshu-Sangshetti/koipond/releases/latest/download";
+const RAW = import.meta.env.VITE_KOI_RAW ?? "https://raw.githubusercontent.com/Himanshu-Sangshetti/koipond/main/wallpaper";
+const REL = import.meta.env.VITE_KOI_REL ?? "https://github.com/Himanshu-Sangshetti/koipond/releases/latest/download";
 const OSES = {
   mac: { name: "Mac", where: "Terminal", cmd: `curl -fsSL ${RAW}/install.sh | sh`, short: "curl -fsSL …/install.sh | sh", key: "click the fish in the menu bar", zip: `${REL}/koipond-mac.zip`, zipNote: "or download the .zip (macOS will ask you to allow it in Privacy & Security)" },
   windows: { name: "Windows", where: "PowerShell", cmd: `irm ${RAW}/install.ps1 | iex`, short: "irm …/install.ps1 | iex", key: "right-click the fish in the tray", zip: `${REL}/koipond-windows.zip`, zipNote: "or download the .zip (Windows may ask you to confirm: More info, Run anyway)" },
@@ -162,7 +162,7 @@ export function App() {
           </>}
           <p className="wd">{paid ? (licence ? `Don't have the app yet? Paste this in ${sys.where}:` : `Your receipt and key are in your email. Install it the same way as everyone, in ${sys.where}:`) : `Free for everyone. Paste this in ${sys.where} to install:`}</p>
           <button className="wcopy wcmd" onClick={() => copy("cmd", sys.cmd)} title={sys.cmd}><code>{sys.short}</code><span>{copied === "cmd" ? "Copied" : "Copy"}</span></button>
-          {!paid && <a className="wrow wpay" href={CHECKOUT} target="_blank" rel="noreferrer"><b>Pay what you want</b><span>Optional. Same app, it just helps me keep making it.</span></a>}
+          {!paid && <a className="wrow wpay" href={CHECKOUT} target="_blank" rel="noreferrer"><b>Pay what you want</b><span>Optional. Supporters also get the new wallpapers as they come out, every 2 weeks to a month.</span></a>}
           {sys.zip && <a className="wzip" href={sys.zip}>{sys.zipNote}</a>}
         </div>
       )}

@@ -13,11 +13,16 @@ const SITE = import.meta.env.VITE_KOI_SITE ?? "https://koipond-demo.vercel.app";
 const CHECKOUT = `${import.meta.env.VITE_KOI_CHECKOUT ?? "https://checkout.dodopayments.com/buy/pdt_0NsYIva9ea1hMacA3xaaB"}?quantity=1&redirect_url=${encodeURIComponent(SITE + "/?thanks")}`;
 // the desktop app: one line to install on each system (no warnings: nothing is marked as downloaded from the web)
 const RAW = import.meta.env.VITE_KOI_RAW ?? "https://raw.githubusercontent.com/Himanshu-Sangshetti/koipond/main/wallpaper";
-const REL = import.meta.env.VITE_KOI_REL ?? "https://github.com/Himanshu-Sangshetti/koipond/releases/latest/download";
 const OSES = {
-  mac: { name: "Mac", where: "Terminal", cmd: `curl -fsSL ${RAW}/install.sh | sh`, short: "curl -fsSL …/install.sh | sh", key: "click the fish in the menu bar", zip: `${REL}/koipond-mac.zip`, zipNote: "or download the .zip (macOS will ask you to allow it in Privacy & Security)" },
-  windows: { name: "Windows", where: "PowerShell", cmd: `irm ${RAW}/install.ps1 | iex`, short: "irm …/install.ps1 | iex", key: "right-click the fish in the tray", zip: `${REL}/koipond-windows.zip`, zipNote: "or download the .zip (Windows may ask you to confirm: More info, Run anyway)" },
-  linux: { name: "Linux", where: "a terminal", cmd: `curl -fsSL ${RAW}/install.sh | sh`, short: "curl -fsSL …/install.sh | sh", key: "right-click the pond", zip: "", zipNote: "" },
+  mac: { name: "Mac", app: "Terminal", cmd: `curl -fsSL ${RAW}/install.sh | sh`, key: "click the fish in the menu bar",
+    open: ["⌘", "Space"], find: "Terminal", paste: ["⌘", "V"], enter: "Return", prompt: "~ %",
+    done: "The pond fills your desktop in a few seconds. Click the fish in the menu bar for looks and settings." },
+  windows: { name: "Windows", app: "PowerShell", cmd: `irm ${RAW}/install.ps1 | iex`, key: "right-click the fish in the tray",
+    open: ["⊞ Win"], find: "PowerShell", paste: ["Ctrl", "V"], enter: "Enter", prompt: "PS C:\\>",
+    done: "The pond fills your desktop in a few seconds. Right-click the fish in the tray for looks and settings." },
+  linux: { name: "Linux", app: "Terminal", cmd: `curl -fsSL ${RAW}/install.sh | sh`, key: "right-click the pond",
+    open: ["Ctrl", "Alt", "T"], find: "", paste: ["Ctrl", "Shift", "V"], enter: "Enter", prompt: "$",
+    done: "The pond fills your desktop. Right-click it for looks and settings. If it asks for two packages first, it prints the one line to install them." },
 } as const;
 type OsId = keyof typeof OSES;
 const guessOs = (): OsId => { const u = typeof navigator !== "undefined" ? navigator.userAgent : ""; return /Windows/i.test(u) ? "windows" : /Linux|X11|CrOS/i.test(u) && !/Android/i.test(u) ? "linux" : "mac"; };
@@ -160,10 +165,29 @@ export function App() {
             <p className="wd">Your supporter key (it's in your email too). In the app, {sys.key}, then "I have a key":</p>
             <button className="wcopy" onClick={() => copy("key", licence)} title={licence}><code>{licence}</code><span>{copied === "key" ? "Copied" : "Copy"}</span></button>
           </>}
-          <p className="wd">{paid ? (licence ? `Don't have the app yet? Paste this in ${sys.where}:` : `Your receipt and key are in your email. Install it the same way as everyone, in ${sys.where}:`) : `Free for everyone. Paste this in ${sys.where} to install:`}</p>
-          <button className="wcopy wcmd" onClick={() => copy("cmd", sys.cmd)} title={sys.cmd}><code>{sys.short}</code><span>{copied === "cmd" ? "Copied" : "Copy"}</span></button>
+          <p className="wd">{paid ? (licence ? "Don't have it yet? Three steps:" : "Your receipt and key are in your email. Install it in three steps:") : "Free for everyone. Install it in three steps:"}</p>
+          <ol className="wsteps">
+            <li>
+              <span className="wn">1</span>
+              <div><p>Open {sys.app}{sys.find ? <>: press {sys.open.map((k) => <kbd key={k}>{k}</kbd>)}, type <b>{sys.find}</b>, press <kbd>{sys.enter}</kbd></> : <>: press {sys.open.map((k) => <kbd key={k}>{k}</kbd>)}</>}</p>
+                {sys.find && <div className="wsearch"><span className="wglass" />{sys.find}<span className="wcaret" /></div>}
+              </div>
+            </li>
+            <li>
+              <span className="wn">2</span>
+              <div><p>Copy this line, then paste it into {sys.app} with {sys.paste.map((k) => <kbd key={k}>{k}</kbd>)}</p>
+                <button className="wcopy wcmd" onClick={() => copy("cmd", sys.cmd)} title={sys.cmd}><code>{sys.cmd}</code><span>{copied === "cmd" ? "Copied" : "Copy"}</span></button>
+              </div>
+            </li>
+            <li>
+              <span className="wn">3</span>
+              <div><p>Press <kbd>{sys.enter}</kbd></p>
+                <div className="wterm"><div className="wbar"><i /><i /><i /><span>{sys.app}</span></div><code><em>{sys.prompt}</em> {sys.cmd.replace(RAW, "…")}{"\n"}Downloading koipond...{"\n"}koipond is running.</code></div>
+                <p className="wdone">{sys.done}</p>
+              </div>
+            </li>
+          </ol>
           {!paid && <a className="wrow wpay" href={CHECKOUT} target="_blank" rel="noreferrer"><b>Pay what you want</b><span>Optional. Supporters also get the new wallpapers as they come out, every 2 weeks to a month.</span></a>}
-          {sys.zip && <a className="wzip" href={sys.zip}>{sys.zipNote}</a>}
         </div>
       )}
       <div className="switch">

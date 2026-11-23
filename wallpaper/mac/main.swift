@@ -373,18 +373,21 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate, WKScriptMessag
     /// Resting the cursor on the right edge of the desktop slides the panel out.
     var edgeNear: Double = -1
     func edgeReveal(_ p: NSPoint) {
-        // the handle on the right edge brightens as the cursor comes within ~140 pt
+        // the handle on the right edge brightens as the cursor comes within ~220 pt
         if let scr = NSScreen.screens.first(where: { NSMouseInRect(p, $0.frame, false) }) {
-            let near = max(0, 1 - Double(scr.frame.maxX - p.x) / 140)
+            let near = max(0, 1 - Double(scr.frame.maxX - p.x) / 220)
             let q = (near * 20).rounded() / 20
             if q != edgeNear { edgeNear = q; windows.forEach { $0.js("koi.edge && koi.edge(\($0.screenRef == scr ? q : 0))") } }
         }
         guard let panel, !panel.isVisible, let scr = NSScreen.screens.first(where: { NSMouseInRect(p, $0.frame, false) }) else { edgeSince = nil; return }
-        let atEdge = p.x >= scr.frame.maxX - 2 && p.y > scr.frame.minY + 40 && p.y < scr.visibleFrame.maxY - 20
+        // a 14 pt strip along the right edge, or anywhere within 40 pt of the handle itself
+        let fromEdge = scr.frame.maxX - p.x
+        let nearHandle = fromEdge <= 40 && abs(p.y - scr.frame.midY) <= 70
+        let atEdge = (fromEdge <= 14 || nearHandle) && p.y > scr.frame.minY + 40 && p.y < scr.visibleFrame.maxY - 20
         if !atEdge || NSEvent.pressedMouseButtons != 0 || covered(p) { edgeSince = nil; return }
         let now = ProcessInfo.processInfo.systemUptime
         if edgeSince == nil { edgeSince = now }
-        if now - edgeSince! > 0.45 {
+        if now - edgeSince! > 0.3 {
             edgeSince = nil
             let f = panel.frame.size
             let y = min(max(p.y - f.height / 2, scr.visibleFrame.minY + 8), scr.visibleFrame.maxY - f.height - 8)

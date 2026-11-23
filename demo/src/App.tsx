@@ -166,7 +166,7 @@ export function App() {
             <button className="wcopy" onClick={() => copy("key", licence)} title={licence}><code>{licence}</code><span>{copied === "key" ? "Copied" : "Copy"}</span></button>
           </>}
           {!paid && <div className="wbuy">
-            <a className="wpay" href={CHECKOUT} target="_blank" rel="noreferrer">Pay what you want <span>from $1</span></a>
+            <a className="wpay" href={CHECKOUT} target="_blank" rel="noreferrer">Pay what you want <span>from $3</span></a>
             <p>Supporters get the new wallpapers as they come out, every 2 weeks to a month. Your key comes by email and works on 5 computers.</p>
             <div className="wor"><span>or install it free</span></div>
           </div>}

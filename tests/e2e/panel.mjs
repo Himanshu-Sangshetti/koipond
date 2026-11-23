@@ -32,7 +32,7 @@ await sync({});
 c.ok(!(await has(".ask")), "no card once it was answered");
 const sizes1 = (await sent()).filter((m) => m.t === "size").map((m) => m.v);
 c.ok(sizes0.length && sizes1.length && Math.max(...sizes0) > sizes1.at(-1), "the panel asks for less height without the card", { sizes0, sizes1 });
-c.ok((await text()).includes("koipond is free. Pay what you want"), "the support row is always there");
+c.ok((await text()).includes("koipond is free.") && (await text()).includes("from $3"), "the support row is always there");
 await p.click(".support .star");
 c.ok((await sent()).some((m) => m.t === "pay"), "the support row opens the checkout too");
 

@@ -35,7 +35,7 @@ print("note  frames %s -> %s (no GPU here; real desktops draw 30-60 a second)" %
 c("the window is on the desktop layer (%s)" % r["typeHint"], r["typeHint"] == "desktop" or r["layerShell"])
 c("the pay-what-you-want card shows on first open", r["card"])
 c("a key typed into the card is checked with Dodo and the answer shows (%s)" % r["cardError"], "wasn't found" in r["cardError"])
-c("the right-click menu offers paying and a key", "Pay what you want…" in r["menu"] and "I have a key…" in r["menu"] and "Quit koipond" in r["menu"])
+c("the right-click menu offers paying and a key", "Pay what you want (from $3)…" in r["menu"] and "I have a key…" in r["menu"] and "Quit koipond" in r["menu"])
 sys.exit(1 if bad else 0)
 PY
 [ -n "$WIN" ] && ok "the window manager sees a desktop-type window ($WIN)" || bad "the window manager sees a desktop-type window"

@@ -1,5 +1,7 @@
 # koipond wallpaper (Mac, Windows, Linux)
 
+**[Pay what you want (from $3)](https://koipond-demo.vercel.app/?get)** or install it free below.
+
 The koi pond as your desktop wallpaper. It sits under your desktop icons, and the koi still notice you:
 glide over empty desktop to leave a wake, click to splash, double-click to drop food, scroll to stir the water.
 Your clicks still go to the desktop as usual.
@@ -49,7 +51,7 @@ the pond.
 
 ## Support
 
-koipond is free. If it makes your desk a bit calmer, you can [pay what you want](https://koipond-demo.vercel.app/?get) or star the repo. One key works on up to 5 computers, any system.
+koipond is free. If it makes your desk a bit calmer, **[pay what you want (from $3)](https://koipond-demo.vercel.app/?get)**: supporters get the new wallpapers as they come out, every 2 weeks to a month. One key works on up to 5 computers, any system.
 
 ## Uninstall
 

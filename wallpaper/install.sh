@@ -32,6 +32,9 @@ if [ "$(uname)" = "Linux" ]; then
   printf '[Desktop Entry]\nType=Application\nName=koipond\nComment=A koi pond as your desktop wallpaper\nExec=%s/koipond\nIcon=%s/koipond.png\nCategories=Utility;\n' "$BIN" "$DEST" > "$APPS/koipond.desktop"
   [ "${KOI_NO_OPEN:-}" = "1" ] || (nohup python3 "$DEST/koipond.py" >/dev/null 2>&1 &)
   echo "koipond is running. Right-click the pond for settings. Installed to $DEST"
+  echo ""
+  echo "koipond is free. If you like it, pay what you want (from $3) and get the new wallpapers as they come out:"
+  echo "  https://koipond-demo.vercel.app/?get"
   exit 0
 fi
 URL="${KOI_URL:-$REL/koipond-mac.zip}"
@@ -48,3 +51,6 @@ rm -rf "$DEST/koipond.app"
 mv "$TMP/koipond.app" "$DEST/koipond.app"
 open "$DEST/koipond.app"
 echo "koipond is running. Click the fish in the menu bar for settings. Installed to $DEST/koipond.app"
+echo ""
+echo "koipond is free. If you like it, pay what you want (from $3) and get the new wallpapers as they come out:"
+echo "  https://koipond-demo.vercel.app/?get"

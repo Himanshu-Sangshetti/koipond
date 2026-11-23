@@ -340,7 +340,7 @@ sealed class App : ApplicationContext
         if (Supporter.Load() != null) m.Items.Add(new ToolStripMenuItem("Supporter. Thank you!") { Enabled = false });
         else
         {
-            m.Items.Add(new ToolStripMenuItem("Pay what you want…", null, (_, _) => Store.OpenCheckout()));
+            m.Items.Add(new ToolStripMenuItem("Pay what you want (from $3)…", null, (_, _) => Store.OpenCheckout()));
             m.Items.Add(new ToolStripMenuItem("I have a key…", null, (_, _) => ShowSupport(true)));
         }
         m.Items.Add(new ToolStripSeparator());

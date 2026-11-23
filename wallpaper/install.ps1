@@ -17,6 +17,9 @@ try {
   Expand-Archive $zip $dest
   if ($env:KOI_NO_OPEN -ne "1") { Start-Process (Join-Path $dest "koipond.exe") }
   Write-Host "koipond is running. Right-click the fish in the tray for settings. Installed to $dest"
+  Write-Host ""
+  Write-Host 'koipond is free. If you like it, pay what you want (from $3) and get the new wallpapers as they come out:'
+  Write-Host "  https://koipond-demo.vercel.app/?get"
 } finally {
   Remove-Item -Recurse -Force $tmp -ErrorAction SilentlyContinue
 }

@@ -372,7 +372,7 @@ class App:
         if supporter():
             item("Supporter. Thank you!", sensitive=False)
         else:
-            item("Pay what you want…", lambda: webbrowser.open(CHECKOUT))
+            item("Pay what you want (from $3)…", lambda: webbrowser.open(CHECKOUT))
             item("I have a key…", lambda: self.show_card(True))
         m.append(Gtk.SeparatorMenuItem())
         for k, name in (("natural", "Natural"), ("ink", "Ink"), ("violet", "Dither")):

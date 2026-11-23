@@ -4,12 +4,17 @@
 set -e
 cd "$(dirname "$0")/.."
 VERSION=$(node -p "require('../package.json').version")
+# the "pay what you want" store: a tagged release must point at the live product (see mac/Support.swift)
+if grep -q '\.live: "",' mac/Support.swift; then
+  [ -n "$KOI_RELEASE" ] && { echo "Support.swift has no live product id; refusing to build a release" >&2; exit 1; }
+  echo "note: no live product id in Support.swift, this build uses the Dodo test store"
+fi
 OUT=build/koipond.app
 rm -rf "$OUT" build/koipond-mac.zip
 mkdir -p "$OUT/Contents/MacOS" "$OUT/Contents/Resources/web"
 
 for arch in arm64 x86_64; do
-  swiftc -O -target "$arch-apple-macos13.0" mac/main.swift -o "build/koipond-$arch" \
+  swiftc -O -target "$arch-apple-macos13.0" mac/main.swift mac/Support.swift -o "build/koipond-$arch" \
     -framework Cocoa -framework WebKit -framework IOKit -framework ServiceManagement
 done
 lipo -create build/koipond-arm64 build/koipond-x86_64 -output "$OUT/Contents/MacOS/koipond"

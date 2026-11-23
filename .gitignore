@@ -6,3 +6,9 @@ demo/node_modules
 demo/dist
 .vercel
 demo/dist/.vercel
+
+# never commit store secrets
+*.key
+.env
+.env.*
+!.env.example

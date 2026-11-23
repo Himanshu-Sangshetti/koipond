@@ -42,8 +42,9 @@ export function App() {
   const q = typeof window !== "undefined" ? new URLSearchParams(location.search) : new URLSearchParams();
   const paid = q.has("thanks") && q.get("status") === "succeeded";
   const [mac, setMac] = useState(q.has("thanks") || q.has("get"));
-  const [copied, setCopied] = useState(false);
-  const copy = () => navigator.clipboard?.writeText(INSTALL).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1800); }).catch(() => {});
+  const licence = paid ? q.get("license_key") ?? "" : "";
+  const [copied, setCopied] = useState("");
+  const copy = (what: string, text: string) => navigator.clipboard?.writeText(text).then(() => { setCopied(what); setTimeout(() => setCopied(""), 1800); }).catch(() => {});
   // music: Spotify's own embedded player (no login needed; full tracks for signed-in Spotify users)
   const [music, setMusic] = useState(false);
   const [embed, setEmbed] = useState("playlist/6jTot6wOCMCSfAnvg6WL5A");
@@ -142,8 +143,12 @@ export function App() {
       {mac && (
         <div className="wallsheet">
           <p className="wt">{paid ? "Thank you for supporting koipond" : "koipond for your Mac desktop"}</p>
-          <p className="wd">{paid ? "Your receipt is on its way. Install it the same way as everyone:" : "Free for everyone. Paste this in Terminal to install:"}</p>
-          <button className="wcopy" onClick={copy} title={INSTALL}><code>curl -fsSL …/install.sh | sh</code><span>{copied ? "Copied" : "Copy"}</span></button>
+          {licence && <>
+            <p className="wd">Your supporter key (it's in your email too). In the app, click the fish in the menu bar, then "I have a key":</p>
+            <button className="wcopy" onClick={() => copy("key", licence)} title={licence}><code>{licence}</code><span>{copied === "key" ? "Copied" : "Copy"}</span></button>
+          </>}
+          <p className="wd">{paid ? (licence ? "Don't have the app yet? Paste this in Terminal:" : "Your receipt and key are in your email. Install it the same way as everyone:") : "Free for everyone. Paste this in Terminal to install:"}</p>
+          <button className="wcopy" onClick={() => copy("cmd", INSTALL)} title={INSTALL}><code>curl -fsSL …/install.sh | sh</code><span>{copied === "cmd" ? "Copied" : "Copy"}</span></button>
           {!paid && <a className="wrow wpay" href={CHECKOUT} target="_blank" rel="noreferrer"><b>Pay what you want</b><span>Optional. Same app, it just helps me keep making it.</span></a>}
           <a className="wzip" href={ZIP}>or download the .zip (macOS will ask you to allow it in Privacy &amp; Security)</a>
         </div>

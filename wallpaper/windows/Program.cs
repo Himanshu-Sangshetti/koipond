@@ -42,7 +42,6 @@ static class Native
     [DllImport("user32.dll")] public static extern IntPtr SendMessageTimeout(IntPtr hwnd, uint msg, IntPtr w, IntPtr l, uint flags, uint timeout, out IntPtr result);
     [DllImport("user32.dll")] public static extern bool EnumWindows(EnumWindowsProc proc, IntPtr lParam);
     [DllImport("user32.dll")] public static extern IntPtr SetParent(IntPtr child, IntPtr parent);
-    [DllImport("user32.dll")] public static extern IntPtr GetParent(IntPtr child);
     [DllImport("user32.dll")] public static extern bool SetWindowPos(IntPtr hwnd, IntPtr after, int x, int y, int cx, int cy, uint flags);
     [DllImport("user32.dll")] public static extern bool GetCursorPos(out POINT p);
     [DllImport("user32.dll")] public static extern short GetAsyncKeyState(int key);
@@ -150,7 +149,7 @@ sealed class PondForm : Form
             await Task.Delay(4000);
             var state = await web.ExecuteScriptAsync("JSON.stringify({frames: window.__frames || 0, canvas: document.querySelector('canvas') ? document.querySelector('canvas').width : 0, title: document.title})");
             var layer = Native.DesktopLayer();
-            File.WriteAllText(smoke, $"{{\"ready\": {(ready ? "true" : "false")}, \"framesBefore\": {f1}, \"page\": {state}, \"layer\": {(layer != IntPtr.Zero ? "true" : "false")}, \"parented\": {(Native.GetParent(Handle) == layer ? "true" : "false")}, \"webview\": \"{CoreWebView2Environment.GetAvailableBrowserVersionString()}\"}}");
+            File.WriteAllText(smoke, $"{{\"ready\": {(ready ? "true" : "false")}, \"framesBefore\": {f1}, \"page\": {state}, \"layer\": {(layer != IntPtr.Zero ? "true" : "false")}, \"parented\": {(Native.GetAncestor(Handle, 1 /* GA_PARENT */) == layer ? "true" : "false")}, \"parentClass\": \"{Native.ClassOf(Native.GetAncestor(Handle, 1))}\", \"layerClass\": \"{Native.ClassOf(layer)}\", \"os\": \"{Environment.OSVersion.VersionString}\", \"webview\": \"{CoreWebView2Environment.GetAvailableBrowserVersionString()}\"}}");
             Application.Exit();
         }
     }

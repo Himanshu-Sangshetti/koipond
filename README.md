@@ -78,16 +78,22 @@ anything else that renders React. `three` (0.160 or newer) is the only other dep
 | Double-tap or long-press | drops food; nearby koi race over to eat |
 | Scroll or swipe | stirs a current; koi, petals and pads stream with it |
 
-## As your wallpaper (macOS)
+## As your wallpaper (Mac, Windows, Linux)
 
-The pond can also live on your desktop, under your icons, and it still reacts to your mouse. Free, no account,
-no other apps needed:
+The pond can also live on your desktop, under your icons, and it still reacts to your mouse. Free, no account:
 
 ```sh
+# macOS and Linux
 curl -fsSL https://raw.githubusercontent.com/Himanshu-Sangshetti/koipond/main/wallpaper/install.sh | sh
 ```
 
-Click the fish in the menu bar for the looks, a focus timer and settings. More in [wallpaper/](wallpaper/).
+```powershell
+# Windows 10/11, in PowerShell
+irm https://raw.githubusercontent.com/Himanshu-Sangshetti/koipond/main/wallpaper/install.ps1 | iex
+```
+
+On a Mac click the fish in the menu bar for the looks, a focus timer and settings. On Windows right-click the
+fish in the tray; on Linux right-click the pond. More in [wallpaper/](wallpaper/).
 
 It stays free for everyone. If you'd like to support it, you can [pay what you want](https://koipond-demo.vercel.app/?get).
 

@@ -12,3 +12,4 @@ demo/dist/.vercel
 .env
 .env.*
 !.env.example
+__pycache__

@@ -21,8 +21,10 @@ sealed class Settings
     public bool Petals { get; set; } = true;
     public bool Interactive { get; set; } = true;
     public bool Paused { get; set; }
+    public DateTime? FirstSeen { get; set; }   // when the app first opened (for the one reminder a week later)
+    public int Asked { get; set; }             // how many times the "pay what you want" card has shown
 
-    static readonly string Dir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "koipond");
+    public static readonly string Dir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "koipond");
     static readonly string FilePath = Path.Combine(Dir, "settings.json");
     public static Settings Load()
     {
@@ -129,7 +131,9 @@ sealed class PondForm : Form
         base.OnShown(e);
         Attach();
         var dataDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "koipond", "WebView2");
-        var env = await CoreWebView2Environment.CreateAsync(null, dataDir);
+        // behind the icons Edge thinks the page is covered and stops drawing it; these keep it drawing
+        var opts = new CoreWebView2EnvironmentOptions("--disable-features=CalculateNativeWinOcclusion --disable-background-timer-throttling --disable-renderer-backgrounding");
+        var env = await CoreWebView2Environment.CreateAsync(null, dataDir, opts);
         await web.EnsureCoreWebView2Async(env);
         var core = web.CoreWebView2;
         core.Settings.AreDefaultContextMenusEnabled = false;
@@ -149,7 +153,7 @@ sealed class PondForm : Form
             await Task.Delay(4000);
             var state = await web.ExecuteScriptAsync("JSON.stringify({frames: window.__frames || 0, canvas: document.querySelector('canvas') ? document.querySelector('canvas').width : 0, title: document.title})");
             var layer = Native.DesktopLayer();
-            File.WriteAllText(smoke, $"{{\"ready\": {(ready ? "true" : "false")}, \"framesBefore\": {f1}, \"page\": {state}, \"layer\": {(layer != IntPtr.Zero ? "true" : "false")}, \"parented\": {(Native.GetAncestor(Handle, 1 /* GA_PARENT */) == layer ? "true" : "false")}, \"parentClass\": \"{Native.ClassOf(Native.GetAncestor(Handle, 1))}\", \"layerClass\": \"{Native.ClassOf(layer)}\", \"os\": \"{Environment.OSVersion.VersionString}\", \"webview\": \"{CoreWebView2Environment.GetAvailableBrowserVersionString()}\"}}");
+            File.WriteAllText(smoke, $"{{\"ready\": {(ready ? "true" : "false")}, \"framesBefore\": {f1}, \"page\": {state}, \"layer\": {(layer != IntPtr.Zero ? "true" : "false")}, \"parented\": {(Native.GetAncestor(Handle, 1 /* GA_PARENT */) == layer ? "true" : "false")}, \"parentClass\": \"{Native.ClassOf(Native.GetAncestor(Handle, 1))}\", \"layerClass\": \"{Native.ClassOf(layer)}\", \"os\": \"{Environment.OSVersion.VersionString}\", \"webview\": \"{CoreWebView2Environment.GetAvailableBrowserVersionString()}\", \"card\": {(Application.OpenForms.OfType<SupportForm>().Any(f => f.Visible) ? "true" : "false")}}}");
             Application.Exit();
         }
     }
@@ -210,6 +214,14 @@ sealed class App : ApplicationContext
         // scrolling over the desktop pushes the water (a low-level hook: no admin, read only)
         hookProc = OnMouseHook;
         hook = Native.SetWindowsHookEx(14 /* WH_MOUSE_LL */, hookProc, Native.GetModuleHandle(null), 0);
+
+        // the optional "pay what you want" card: on first open and once more a week later (see Support.cs)
+        if (SupportAsk.Due(settings, DateTime.UtcNow) && Environment.GetEnvironmentVariable("KOI_NOASK") == null)
+        {
+            var later = new System.Windows.Forms.Timer { Interval = 2500 };
+            later.Tick += (_, _) => { later.Stop(); SupportAsk.MarkAsked(settings); ShowSupport(false); };
+            later.Start();
+        }
 
         SystemEvents.DisplaySettingsChanged += (_, _) => BuildPonds();
         SystemEvents.PowerModeChanged += (_, e) =>
@@ -311,11 +323,26 @@ sealed class App : ApplicationContext
         return Native.CallNextHookEx(hook, code, w, l);
     }
 
+    SupportForm? support;
+    void ShowSupport(bool keyFirst)
+    {
+        if (support != null) { support.Activate(); return; }
+        support = new SupportForm(keyFirst);
+        support.FormClosed += (_, _) => support = null;
+        support.Show();
+    }
+
     // --- tray menu
     void BuildMenu(ContextMenuStrip m)
     {
         m.Items.Clear();
         m.Items.Add(new ToolStripMenuItem("koipond") { Enabled = false });
+        if (Supporter.Load() != null) m.Items.Add(new ToolStripMenuItem("Supporter. Thank you!") { Enabled = false });
+        else
+        {
+            m.Items.Add(new ToolStripMenuItem("Pay what you want…", null, (_, _) => Store.OpenCheckout()));
+            m.Items.Add(new ToolStripMenuItem("I have a key…", null, (_, _) => ShowSupport(true)));
+        }
         m.Items.Add(new ToolStripSeparator());
         foreach (var (id, name) in new[] { ("natural", "Natural"), ("ink", "Ink"), ("violet", "Dither") })
             m.Items.Add(Item(name, settings.Look == id, () => settings.Look = id));
@@ -360,6 +387,16 @@ static class Program
     [STAThread]
     static void Main()
     {
+        // testing: KOI_ACTIVATE=<key> checks the key with the store, prints the result and quits
+        var testKey = Environment.GetEnvironmentVariable("KOI_ACTIVATE");
+        if (testKey != null)
+        {
+            var (ok, err) = Activation.Activate(testKey).GetAwaiter().GetResult();
+            var line = ok != null ? $"activated {Store.Mode} {ok.InstanceID} {ok.Email}" : $"failed {err}";
+            var outFile = Environment.GetEnvironmentVariable("KOI_SMOKE");
+            if (outFile != null) File.WriteAllText(outFile, line); else Console.WriteLine(line);
+            return;
+        }
         using var single = new Mutex(true, "koipond-wallpaper", out var first);
         if (!first) return;
         ApplicationConfiguration.Initialize();

@@ -1,4 +1,4 @@
-# koipond wallpaper (macOS)
+# koipond wallpaper (Mac, Windows, Linux)
 
 The koi pond as your desktop wallpaper. It sits under your desktop icons, and the koi still notice you:
 glide over empty desktop to leave a wake, click to splash, double-click to drop food, scroll to stir the water.
@@ -18,6 +18,25 @@ install above doesn't hit this.
 
 Needs macOS 13 or newer, Apple silicon or Intel.
 
+### Windows 10/11
+
+In PowerShell (no admin needed):
+
+```powershell
+irm https://raw.githubusercontent.com/Himanshu-Sangshetti/koipond/main/wallpaper/install.ps1 | iex
+```
+
+It installs into `%LOCALAPPDATA%\koipond` and starts it. Right-click the fish in the tray for the looks, koi,
+rain, lilies, sakura, pause and open at login. Uses Edge WebView2, which Windows 10/11 already has.
+
+### Linux
+
+The same one-liner as the Mac. It needs GTK and WebKitGTK for Python (the installer tells you the package
+names if they are missing; on Ubuntu: `sudo apt install python3-gi gir1.2-webkit2-4.1`). Right-click the pond for
+settings. Works on X11 desktops and on GNOME under Wayland (through XWayland); KDE Plasma, Sway and Hyprland on
+Wayland use the background layer when `gtk-layer-shell` is installed. Desktop icon extensions may sit under
+the pond.
+
 ## Using it
 
 - **Click the fish** in the menu bar: looks (Natural, Ink, Dither), a 25/5 focus timer, koi count, size, rain,
@@ -30,12 +49,13 @@ Needs macOS 13 or newer, Apple silicon or Intel.
 
 ## Support
 
-koipond is free. If it makes your desk a bit calmer, you can [pay what you want](https://koipond-demo.vercel.app/?get) or [buy me a coffee](https://buymeacoffee.com/himanshu_sangshetti)
-or star the repo.
+koipond is free. If it makes your desk a bit calmer, you can [pay what you want](https://koipond-demo.vercel.app/?get) or star the repo. One key works on up to 5 computers, any system.
 
 ## Uninstall
 
-Quit it from the panel (or right-click the fish → Quit), then drag `koipond.app` from Applications to the Bin.
+Mac: quit it from the panel (or right-click the fish → Quit), then drag `koipond.app` from Applications to the Bin.
+Windows: quit it from the tray, then delete `%LOCALAPPDATA%\koipond`. Linux: right-click the pond → Quit, then
+delete `~/.local/share/koipond` and `~/.local/bin/koipond`.
 
 ## Build it yourself
 
@@ -44,5 +64,8 @@ cd wallpaper && npm ci && npm run build:mac   # needs Node and the Xcode command
 open build/koipond.app
 ```
 
-The app is a small Swift shell (`mac/main.swift`) around the pond page (`web/`). It uses its own copy of the
+Windows: `npm run build:web`, copy `build/web/index.html` to `windows/web/`, then
+`dotnet publish windows/koipond.csproj -c Release`. Linux: `npm run build:linux`, then `python3 build/linux/koipond.py`.
+
+The Mac app is a small Swift shell (`mac/main.swift`) around the pond page (`web/`). It uses its own copy of the
 pond in `pond/`, so changes here never touch the npm component in `../src`.

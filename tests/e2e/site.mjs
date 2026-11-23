@@ -1,4 +1,4 @@
-// The demo site's "Mac app" sheet: free install, optional pay-what-you-want checkout, thank-you screen.
+// The demo site's "Desktop app" sheet: free install, optional pay-what-you-want checkout, thank-you screen.
 // Serves demo/dist (run `npx vite build` in demo/ first) and clicks through it in headless Chrome.
 import http from "node:http";
 import fs from "node:fs";
@@ -10,6 +10,7 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..")
 const dist = path.join(root, "demo/dist");
 const LIVE_PRODUCT = "pdt_0NsYIva9ea1hMacA3xaaB";
 const INSTALL = "curl -fsSL https://raw.githubusercontent.com/Himanshu-Sangshetti/koipond/main/wallpaper/install.sh | sh";
+const INSTALL_WIN = "irm https://raw.githubusercontent.com/Himanshu-Sangshetti/koipond/main/wallpaper/install.ps1 | iex";
 const types = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css", ".png": "image/png", ".jpg": "image/jpeg", ".webp": "image/webp", ".svg": "image/svg+xml", ".ico": "image/x-icon", ".json": "application/json" };
 const server = http.createServer((req, res) => {
   let f = path.join(dist, decodeURIComponent(new URL(req.url, "http://x").pathname));
@@ -27,23 +28,36 @@ await p.send("Browser.grantPermissions", { origin, permissions: ["clipboardReadW
 const has = (sel) => p.eval(`!!document.querySelector(${JSON.stringify(sel)})`);
 const clip = () => p.eval("navigator.clipboard.readText()");
 
+// a Linux browser, the same on every machine that runs this
+await p.send("Emulation.setUserAgentOverride", { userAgent: "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36" });
 await p.size(1440, 900);
 await p.open(origin + "/");
 c.ok(await has("canvas"), "the pond renders");
 c.ok(!(await has(".wallsheet")), "the sheet is closed on a normal visit");
-await p.click("Mac app");
-c.ok(await has(".wallsheet"), "'Mac app' opens the sheet");
+await p.click("Desktop app");
+c.ok(await has(".wallsheet"), "'Desktop app' opens the sheet");
 c.ok((await p.eval("document.querySelector('.wallsheet').innerText")).includes("Free for everyone"), "the sheet says it is free");
-await p.click(".wallsheet .wcopy");
-c.ok((await clip()) === INSTALL, "Copy copies the full install command");
+c.ok(await p.eval("document.querySelector('.wos button.on')?.innerText === 'Linux'"), "this browser's system (Linux) is picked by default");
+await p.click("Mac");
+await p.click(".wallsheet .wcmd");
+c.ok((await clip()) === INSTALL, "Mac: Copy copies the full install command");
+c.ok((await p.eval("document.querySelector('.wzip').href")).endsWith("/releases/latest/download/koipond-mac.zip"), "Mac: the .zip link is the latest release");
+await p.click("Windows");
+c.ok((await p.eval("document.querySelector('.wallsheet').innerText")).includes("PowerShell"), "Windows: says to use PowerShell");
+await p.click(".wallsheet .wcmd");
+c.ok((await clip()) === INSTALL_WIN, "Windows: Copy copies the PowerShell install command");
+c.ok((await p.eval("document.querySelector('.wzip').href")).endsWith("/releases/latest/download/koipond-windows.zip"), "Windows: the .zip link is the latest release");
+await p.click("Linux");
+await p.click(".wallsheet .wcmd");
+c.ok((await clip()) === INSTALL, "Linux: Copy copies the install command");
+c.ok(!(await has(".wzip")), "Linux: no .zip link (the command is the way)");
 const pay = await p.eval("document.querySelector('.wpay')?.href");
 const u = pay && new URL(pay);
 c.ok(u && u.host === "checkout.dodopayments.com" && u.pathname === `/buy/${LIVE_PRODUCT}`, "'Pay what you want' goes to the live Dodo product", pay);
 c.ok(u && u.searchParams.get("redirect_url") === "https://koipond-demo.vercel.app/?thanks", "checkout returns to the thank-you screen", u && u.searchParams.get("redirect_url"));
 c.ok(await p.eval("document.querySelector('.wpay').target === '_blank'"), "checkout opens in a new tab");
-c.ok((await p.eval("document.querySelector('.wzip').href")).endsWith("/releases/latest/download/koipond-mac.zip"), "the .zip link is the latest release");
-await p.click("Mac app");
-c.ok(!(await has(".wallsheet")), "'Mac app' closes the sheet again");
+await p.click("Desktop app");
+c.ok(!(await has(".wallsheet")), "'Desktop app' closes the sheet again");
 
 await p.open(origin + "/?get");
 c.ok(await has(".wallsheet") && await has(".wpay"), "?get (the receipt link) opens the sheet");
@@ -53,6 +67,7 @@ const thanks = await p.eval("document.querySelector('.wallsheet')?.innerText || 
 c.ok(thanks.includes("Thank you for supporting koipond"), "a paid return shows the thank-you screen");
 c.ok(thanks.includes("11111111-2222-3333-4444-555555555555"), "the thank-you screen shows the key");
 c.ok(!(await has(".wpay")), "no pay button after paying");
+c.ok(thanks.includes("right-click the pond"), "the key instructions match the system (Linux)");
 await p.click(".wallsheet .wcopy");
 c.ok((await clip()) === "11111111-2222-3333-4444-555555555555", "Copy copies the key");
 

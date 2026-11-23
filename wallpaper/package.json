@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "build:web": "vite build && vite build --mode panel",
-    "build:mac": "npm run build:web && sh mac/build.sh"
+    "build:mac": "npm run build:web && sh mac/build.sh",
+    "build:linux": "npm run build:web && sh linux/build.sh"
   },
   "dependencies": {
     "react": "^19.0.0",

@@ -11,8 +11,16 @@ type Settings = { fish: number; size: number; caustics: number; waves: number; r
 // pay-what-you-want checkout (Dodo Payments). The app itself is free; paying is optional.
 const SITE = "https://koipond-demo.vercel.app";
 const CHECKOUT = `${import.meta.env.VITE_KOI_CHECKOUT ?? "https://checkout.dodopayments.com/buy/pdt_0NsYIva9ea1hMacA3xaaB"}?quantity=1&redirect_url=${encodeURIComponent(SITE + "/?thanks")}`;
-const INSTALL = "curl -fsSL https://raw.githubusercontent.com/Himanshu-Sangshetti/koipond/main/wallpaper/install.sh | sh";
-const ZIP = "https://github.com/Himanshu-Sangshetti/koipond/releases/latest/download/koipond-mac.zip";
+// the desktop app: one line to install on each system (no warnings: nothing is marked as downloaded from the web)
+const RAW = "https://raw.githubusercontent.com/Himanshu-Sangshetti/koipond/main/wallpaper";
+const REL = "https://github.com/Himanshu-Sangshetti/koipond/releases/latest/download";
+const OSES = {
+  mac: { name: "Mac", where: "Terminal", cmd: `curl -fsSL ${RAW}/install.sh | sh`, short: "curl -fsSL …/install.sh | sh", key: "click the fish in the menu bar", zip: `${REL}/koipond-mac.zip`, zipNote: "or download the .zip (macOS will ask you to allow it in Privacy & Security)" },
+  windows: { name: "Windows", where: "PowerShell", cmd: `irm ${RAW}/install.ps1 | iex`, short: "irm …/install.ps1 | iex", key: "right-click the fish in the tray", zip: `${REL}/koipond-windows.zip`, zipNote: "or download the .zip (Windows may ask you to confirm: More info, Run anyway)" },
+  linux: { name: "Linux", where: "a terminal", cmd: `curl -fsSL ${RAW}/install.sh | sh`, short: "curl -fsSL …/install.sh | sh", key: "right-click the pond", zip: "", zipNote: "" },
+} as const;
+type OsId = keyof typeof OSES;
+const guessOs = (): OsId => { const u = typeof navigator !== "undefined" ? navigator.userAgent : ""; return /Windows/i.test(u) ? "windows" : /Linux|X11|CrOS/i.test(u) && !/Android/i.test(u) ? "linux" : "mac"; };
 const DEFAULTS: Settings = { fish: 18, size: 0.18, caustics: 2.1, waves: 1.9, rain: 0.65, pads: true, petals: true };
 
 function Slider({ label, value, min, max, step, onChange }: { label: string; value: number; min: number; max: number; step: number; onChange: (v: number) => void }) {
@@ -38,12 +46,14 @@ export function App() {
   const [stars, setStars] = useState<number | null>(null);
   const [bare, setBare] = useState(false);       // full screen: only the pond
   const pondRef = useRef<KoiPondHandle>(null);
-  // the Mac app sheet: opens by itself after a payment (?thanks) or from the receipt link (?get)
+  // the desktop app sheet: opens by itself after a payment (?thanks) or from the receipt link (?get)
   const q = typeof window !== "undefined" ? new URLSearchParams(location.search) : new URLSearchParams();
   const paid = q.has("thanks") && q.get("status") === "succeeded";
   const [mac, setMac] = useState(q.has("thanks") || q.has("get"));
   const licence = paid ? q.get("license_key") ?? "" : "";
   const [copied, setCopied] = useState("");
+  const [os, setOs] = useState<OsId>(guessOs);
+  const sys = OSES[os];
   const copy = (what: string, text: string) => navigator.clipboard?.writeText(text).then(() => { setCopied(what); setTimeout(() => setCopied(""), 1800); }).catch(() => {});
   // music: Spotify's own embedded player (no login needed; full tracks for signed-in Spotify users)
   const [music, setMusic] = useState(false);
@@ -135,22 +145,25 @@ export function App() {
           <svg viewBox="0 0 16 16" width="15" height="15" fill="currentColor" aria-hidden><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
           {stars !== null && <span className="star">★ {stars}</span>}
         </a>
-        <button className={`linkbtn macbtn ${mac ? "on" : ""}`} onClick={() => setMac((m) => !m)}>Mac app</button>
+        <button className={`linkbtn macbtn ${mac ? "on" : ""}`} onClick={() => setMac((m) => !m)}>Desktop app</button>
         <button className="linkbtn" onClick={fullscreen} aria-label="Full screen">
           <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" /></svg>
         </button>
       </nav>
       {mac && (
         <div className="wallsheet">
-          <p className="wt">{paid ? "Thank you for supporting koipond" : "koipond for your Mac desktop"}</p>
+          <p className="wt">{paid ? "Thank you for supporting koipond" : "koipond for your desktop"}</p>
+          <div className="wos">
+            {(Object.keys(OSES) as OsId[]).map((id) => <button key={id} className={os === id ? "on" : ""} onClick={() => setOs(id)}>{OSES[id].name}</button>)}
+          </div>
           {licence && <>
-            <p className="wd">Your supporter key (it's in your email too). In the app, click the fish in the menu bar, then "I have a key":</p>
+            <p className="wd">Your supporter key (it's in your email too). In the app, {sys.key}, then "I have a key":</p>
             <button className="wcopy" onClick={() => copy("key", licence)} title={licence}><code>{licence}</code><span>{copied === "key" ? "Copied" : "Copy"}</span></button>
           </>}
-          <p className="wd">{paid ? (licence ? "Don't have the app yet? Paste this in Terminal:" : "Your receipt and key are in your email. Install it the same way as everyone:") : "Free for everyone. Paste this in Terminal to install:"}</p>
-          <button className="wcopy" onClick={() => copy("cmd", INSTALL)} title={INSTALL}><code>curl -fsSL …/install.sh | sh</code><span>{copied === "cmd" ? "Copied" : "Copy"}</span></button>
+          <p className="wd">{paid ? (licence ? `Don't have the app yet? Paste this in ${sys.where}:` : `Your receipt and key are in your email. Install it the same way as everyone, in ${sys.where}:`) : `Free for everyone. Paste this in ${sys.where} to install:`}</p>
+          <button className="wcopy wcmd" onClick={() => copy("cmd", sys.cmd)} title={sys.cmd}><code>{sys.short}</code><span>{copied === "cmd" ? "Copied" : "Copy"}</span></button>
           {!paid && <a className="wrow wpay" href={CHECKOUT} target="_blank" rel="noreferrer"><b>Pay what you want</b><span>Optional. Same app, it just helps me keep making it.</span></a>}
-          <a className="wzip" href={ZIP}>or download the .zip (macOS will ask you to allow it in Privacy &amp; Security)</a>
+          {sys.zip && <a className="wzip" href={sys.zip}>{sys.zipNote}</a>}
         </div>
       )}
       <div className="switch">

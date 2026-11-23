@@ -62,7 +62,7 @@ enum Activation {
             switch self {
             case .notFound: return "That key wasn't found. Check it was pasted in full."
             case .inactive: return "That key has been turned off (for example after a refund)."
-            case .limitReached: return "That key is already in use on 5 Macs."
+            case .limitReached: return "That key is already in use on 5 computers."
             case .wrongProduct: return "That key is for a different product."
             case .server(let c): return "The key server had a problem (\(c)). Try again in a minute."
             case .network(let t): return "Couldn't reach the key server: \(t)"

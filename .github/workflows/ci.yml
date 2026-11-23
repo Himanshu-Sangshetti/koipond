@@ -16,3 +16,10 @@ jobs:
       - run: npm run typecheck
       - run: npm run build
       - run: npm pack --dry-run
+      # the demo site's "Mac app" sheet: free install, live checkout link, thank-you screen with the key
+      - run: npm ci
+        working-directory: demo
+      - run: npx vite build
+        working-directory: demo
+      - name: Site checks
+        run: node tests/e2e/site.mjs

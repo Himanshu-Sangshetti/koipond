@@ -101,6 +101,6 @@ enum Activation {
         }
         guard let b = try? JSONDecoder().decode(Body.self, from: data) else { return .failure(.server(status)) }
         guard b.product.product_id == Store.productID else { return .failure(.wrongProduct) }
-        return .success(Supporter(key: key, instanceID: b.id, email: b.customer.email, since: Date()))
+        return .success(Supporter(key: key.trimmingCharacters(in: .whitespacesAndNewlines), instanceID: b.id, email: b.customer.email, since: Date()))
     }
 }

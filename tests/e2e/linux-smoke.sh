@@ -18,9 +18,13 @@ xsetroot -solid "#444444" 2>/dev/null || true
 R=$(mktemp)
 KOI_CARD_KEY=KOIPOND-NOT-A-REAL-KEY KOI_SMOKE=$R KOI_WEB=build/linux/web python3 build/linux/koipond.py >/tmp/koi-linux.log 2>&1 &
 PID=$!
-sleep 9
+sleep 3
+# the window manager may take a moment on a slow machine: look for up to ~7 s (the app reports at ~12 s)
+WIN=""; for _ in 1 2 3 4 5 6 7; do
+  WIN=$(xprop -root _NET_CLIENT_LIST 2>/dev/null | grep -o '0x[0-9a-f]*' | while read w; do xprop -id "$w" _NET_WM_WINDOW_TYPE | grep -q DESKTOP && echo "$w"; done | head -1)
+  [ -n "$WIN" ] && break; sleep 1; done
+sleep 2
 import -window root "$OUT/linux-desktop.png" 2>/dev/null
-WIN=$(xprop -root _NET_CLIENT_LIST 2>/dev/null | grep -o '0x[0-9a-f]*' | while read w; do xprop -id "$w" _NET_WM_WINDOW_TYPE | grep -q DESKTOP && echo "$w"; done | head -1)
 wait $PID
 cat "$R"; echo
 cat /tmp/koi-linux.log | grep -v "^$" | tail -5

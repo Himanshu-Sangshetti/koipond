@@ -1,4 +1,4 @@
-// The demo site's "Desktop app" sheet: free install, optional pay-what-you-want checkout, thank-you screen.
+// The demo site's "Desktop wallpaper" sheet: free install, optional pay-what-you-want checkout, thank-you screen.
 // Serves demo/dist (run `npx vite build` in demo/ first) and clicks through it in headless Chrome.
 import http from "node:http";
 import fs from "node:fs";
@@ -34,9 +34,10 @@ await p.size(1440, 900);
 await p.open(origin + "/");
 c.ok(await has("canvas"), "the pond renders");
 c.ok(!(await has(".wallsheet")), "the sheet is closed on a normal visit");
-await p.click("Desktop app");
-c.ok(await has(".wallsheet"), "'Desktop app' opens the sheet");
-c.ok((await p.eval("document.querySelector('.wallsheet').innerText")).includes("Free for everyone"), "the sheet says it is free");
+await p.click("Desktop wallpaper");
+c.ok(await has(".wallsheet"), "'Desktop wallpaper' opens the sheet");
+c.ok((await p.eval("document.querySelector('.wallsheet').innerText")).includes("or install it free"), "the sheet offers paying first, then the free install");
+c.ok(await p.eval("(() => { const a = document.querySelector('.wbuy'), b = document.querySelector('.wsteps'); return !!a && !!b && !!(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING); })()"), "the pay button comes before the install steps");
 c.ok(await p.eval("document.querySelector('.wos button.on')?.innerText === 'Linux'"), "this browser's system (Linux) is picked by default");
 await p.click("Mac");
 await p.click(".wallsheet .wcmd");
@@ -56,8 +57,8 @@ const u = pay && new URL(pay);
 c.ok(u && u.host === "checkout.dodopayments.com" && u.pathname === `/buy/${LIVE_PRODUCT}`, "'Pay what you want' goes to the live Dodo product", pay);
 c.ok(u && u.searchParams.get("redirect_url") === "https://koipond-demo.vercel.app/?thanks", "checkout returns to the thank-you screen", u && u.searchParams.get("redirect_url"));
 c.ok(await p.eval("document.querySelector('.wpay').target === '_blank'"), "checkout opens in a new tab");
-await p.click("Desktop app");
-c.ok(!(await has(".wallsheet")), "'Desktop app' closes the sheet again");
+await p.click("Desktop wallpaper");
+c.ok(!(await has(".wallsheet")), "'Desktop wallpaper' closes the sheet again");
 
 await p.open(origin + "/?get");
 c.ok(await has(".wallsheet") && await has(".wpay"), "?get (the receipt link) opens the sheet");

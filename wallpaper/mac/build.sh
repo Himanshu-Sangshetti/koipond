@@ -3,7 +3,7 @@
 # Needs only the Xcode command line tools. Run `npx vite build` first (or `npm run build:mac`).
 set -e
 cd "$(dirname "$0")/.."
-VERSION=$(node -p "require('../package.json').version")
+VERSION=$(node -p "require('./package.json').version")
 # the "pay what you want" store: a tagged release must point at the live product (see mac/Support.swift)
 if grep -q '\.live: "",' mac/Support.swift; then
   [ -n "$KOI_RELEASE" ] && { echo "Support.swift has no live product id; refusing to build a release" >&2; exit 1; }

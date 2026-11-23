@@ -11,7 +11,7 @@ enum Store {
 
     static let products: [Mode: String] = [
         .test: "pdt_0NsYCacmTCBksDKMSi7PX",
-        .live: "",
+        .live: "pdt_0NsYIva9ea1hMacA3xaaB",
     ]
     /// Live once a live product id is set. `KOI_STORE=test` forces test mode for development.
     static var mode: Mode {

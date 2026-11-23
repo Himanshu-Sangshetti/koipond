@@ -10,7 +10,7 @@ type StyleId = (typeof STYLES)[number]["id"];
 type Settings = { fish: number; size: number; caustics: number; waves: number; rain: number; pads: boolean; petals: boolean };
 // pay-what-you-want checkout (Dodo Payments). The app itself is free; paying is optional.
 const SITE = "https://koipond-demo.vercel.app";
-const CHECKOUT = `${import.meta.env.VITE_KOI_CHECKOUT ?? "https://test.checkout.dodopayments.com/buy/pdt_0NsYCacmTCBksDKMSi7PX"}?quantity=1&redirect_url=${encodeURIComponent(SITE + "/?thanks")}`;
+const CHECKOUT = `${import.meta.env.VITE_KOI_CHECKOUT ?? "https://checkout.dodopayments.com/buy/pdt_0NsYIva9ea1hMacA3xaaB"}?quantity=1&redirect_url=${encodeURIComponent(SITE + "/?thanks")}`;
 const INSTALL = "curl -fsSL https://raw.githubusercontent.com/Himanshu-Sangshetti/koipond/main/wallpaper/install.sh | sh";
 const ZIP = "https://github.com/Himanshu-Sangshetti/koipond/releases/latest/download/koipond-mac.zip";
 const DEFAULTS: Settings = { fish: 18, size: 0.18, caustics: 2.1, waves: 1.9, rain: 0.65, pads: true, petals: true };

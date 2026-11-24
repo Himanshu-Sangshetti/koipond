@@ -11,17 +11,30 @@ const CHROME = process.env.CHROME || ({
 
 export const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 
-export async function launch() {
+// start Chrome and wait for its first tab; slow CI runners get a longer wait and one fresh retry
+async function start() {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "koi-e2e-"));
   const port = 9300 + Math.floor(Math.random() * 500);
   const proc = spawn(CHROME, ["--headless=new", "--no-first-run", "--no-default-browser-check", "--mute-audio", "--use-angle=swiftshader", "--enable-unsafe-swiftshader",
     `--remote-debugging-port=${port}`, `--user-data-dir=${dir}`, "--allow-file-access-from-files", "about:blank"], { stdio: "ignore" });
-  let target;
-  for (let i = 0; i < 100 && !target; i++) {
+  const base = `http://127.0.0.1:${port}`;
+  for (let i = 0; i < 200; i++) {
     await wait(150);
-    target = await fetch(`http://127.0.0.1:${port}/json/list`).then((r) => r.json()).then((l) => l.find((t) => t.type === "page")).catch(() => null);
+    const list = await fetch(`${base}/json/list`).then((r) => r.json()).catch(() => null);
+    if (!list) continue;
+    const page = list.find((t) => t.type === "page");
+    if (page) return { proc, target: page };
+    // the browser is up but has no tab yet: open one ourselves
+    if (i > 20) { const t = await fetch(`${base}/json/new?about:blank`, { method: "PUT" }).then((r) => r.json()).catch(() => null); if (t?.webSocketDebuggerUrl) return { proc, target: t }; }
   }
-  if (!target) throw new Error("Chrome did not start (set CHROME to its path)");
+  proc.kill();
+  return null;
+}
+
+export async function launch() {
+  const got = (await start()) ?? (await start());
+  if (!got) throw new Error("Chrome did not start (set CHROME to its path)");
+  const { proc, target } = got;
   const ws = new WebSocket(target.webSocketDebuggerUrl);
   await new Promise((r, j) => { ws.onopen = r; ws.onerror = j; });
   let id = 0; const pending = new Map(); const errors = [];

@@ -13,7 +13,9 @@ await p.open(url, "window.__sent=[];window.webkit={messageHandlers:{koi:{postMes
 
 const base = { settings: { look: "natural", fish: 14, size: 0.18, rain: true, rainAmount: 0.5, pads: true, petals: true, interactive: true, quality: "balanced", login: false, showIcon: true }, timer: { mode: "focus", left: 1500, running: false } };
 const sync = async (support) => { await p.eval(`panel.sync(${JSON.stringify({ ...base, support: { supporter: false, email: "", ask: false, busy: false, error: "", ...support } })})`); await wait(300); };
-const sent = () => p.eval("window.__sent.splice(0)");
+// every height the panel asks for, kept across reads (the ResizeObserver reports a moment later)
+const sizes = [];
+const sent = async () => { const m = await p.eval("window.__sent.splice(0)"); sizes.push(...m.filter((x) => x.t === "size").map((x) => x.v)); return m; };
 const has = (sel) => p.eval(`!!document.querySelector(${JSON.stringify(sel)})`);
 const text = () => p.eval("document.body.innerText");
 
@@ -22,7 +24,7 @@ c.ok((await sent()).some((m) => m.t === "ready"), "the panel tells the app it is
 await sync({ ask: true });
 c.ok(await has(".ask"), "the card shows when the app asks for it");
 c.ok((await text()).includes("koipond is free for everyone"), "the card says the app is free");
-const sizes0 = (await sent()).filter((m) => m.t === "size").map((m) => m.v);
+await sent(); const sizes0 = sizes.splice(0);
 await p.click("Pay what you want");
 c.ok((await sent()).some((m) => m.t === "pay"), "'Pay what you want' asks the app to open the checkout");
 await p.click("Continue free");
@@ -30,7 +32,8 @@ c.ok((await sent()).some((m) => m.t === "skip"), "'Continue free' closes the car
 
 await sync({});
 c.ok(!(await has(".ask")), "no card once it was answered");
-const sizes1 = (await sent()).filter((m) => m.t === "size").map((m) => m.v);
+for (let i = 0; i < 20 && !(sizes.length && sizes.at(-1) < Math.max(...sizes0)); i++) { await wait(100); await sent(); }
+const sizes1 = sizes.splice(0);
 c.ok(sizes0.length && sizes1.length && Math.max(...sizes0) > sizes1.at(-1), "the panel asks for less height without the card", { sizes0, sizes1 });
 c.ok((await text()).includes("koipond is free.") && (await text()).includes("from $3"), "the support row is always there");
 await p.click(".support .star");
